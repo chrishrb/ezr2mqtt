@@ -1,0 +1,22 @@
+version: '3.8'
+
+services:
+  ezr2mqtt:
+    build: .
+    image: ezr2mqtt:latest
+    container_name: ezr2mqtt
+    restart: unless-stopped
+    volumes:
+      - ./ezr2mqtt.yaml:/config/ezr2mqtt.yaml:ro
+    environment:
+      - TZ=Europe/Berlin
+    network_mode: host
+    # Alternative if not using host network:
+    # networks:
+    #   - homeassistant
+    # depends_on:
+    #   - mosquitto
+
+# networks:
+#   homeassistant:
+#     external: true

@@ -6,7 +6,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chrishrb/ezr2mqtt/internal/pubsub/mqtt"
+	"github.com/chrishrb/ezr2mqtt/api/mqtt"
 	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/paho"
 )

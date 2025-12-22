@@ -8,11 +8,10 @@ import (
 	"log/slog"
 	"math/rand"
 	"net/url"
-	"strconv"
 	"strings"
 	"time"
 
-	"github.com/chrishrb/ezr2mqtt/internal/pubsub"
+	"github.com/chrishrb/ezr2mqtt/api"
 	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/paho"
 )
@@ -40,10 +39,10 @@ func ensureListenerDefaults(l *Listener) {
 		l.mqttBrokerUrls = []*url.URL{u}
 	}
 	if l.mqttPrefix == "" {
-		l.mqttPrefix = "hoval"
+		l.mqttPrefix = "ezr"
 	}
 	if l.mqttGroup == "" {
-		l.mqttGroup = "hoval-gw"
+		l.mqttGroup = "ezr2mqtt"
 	}
 	if l.mqttConnectTimeout == 0 {
 		l.mqttConnectTimeout = 10 * time.Second
@@ -56,7 +55,7 @@ func ensureListenerDefaults(l *Listener) {
 	}
 }
 
-func (l *Listener) Connect(ctx context.Context, handler pubsub.MessageHandler) (pubsub.Connection, error) {
+func (l *Listener) Connect(ctx context.Context, handler api.MessageHandler) (api.Connection, error) {
 	var err error
 
 	ctx, cancel := context.WithTimeout(ctx, l.mqttConnectTimeout)
@@ -66,7 +65,8 @@ func (l *Listener) Connect(ctx context.Context, handler pubsub.MessageHandler) (
 
 	readyCh := make(chan struct{})
 
-	topic := fmt.Sprintf("%s/in/+", l.mqttPrefix)
+	// e.g. ezr/id123/bedroom/set/temperature
+	topic := fmt.Sprintf("%s/+/+/set/+", l.mqttPrefix)
 
 	conn := new(connection)
 	mqttRouter := paho.NewStandardRouter()
@@ -86,17 +86,12 @@ func (l *Listener) Connect(ctx context.Context, handler pubsub.MessageHandler) (
 			mqttRouter.RegisterHandler(topic, func(mqttMsg *paho.Publish) {
 				ctx := context.Background()
 
-				// determine functionGroup, functionNumber, datapointID
+				// determine id - ezr/id123/bedroom/set/temperature
 				topicParts := strings.Split(mqttMsg.Topic, "/")
-
-				receiverMask, err := stringToUint32(topicParts[len(topicParts)-1])
-				if err != nil {
-					slog.Error("unable to convert receiverMask to uint32", "err", err)
-					return
-				}
+				id := topicParts[len(topicParts)-4]
 
 				// unmarshal the message
-				var msg pubsub.Message
+				var msg api.Message
 				err = json.Unmarshal(mqttMsg.Payload, &msg)
 				if err != nil {
 					slog.Warn("unable to unmarshal message", "err", err)
@@ -104,7 +99,7 @@ func (l *Listener) Connect(ctx context.Context, handler pubsub.MessageHandler) (
 				}
 
 				// execute the handler
-				handler.Handle(ctx, receiverMask, &msg)
+				handler.Handle(ctx, id, &msg)
 			})
 			readyCh <- struct{}{}
 		},
@@ -149,15 +144,4 @@ func randSeq(n int) string {
 		b[i] = letters[rand.Intn(len(letters))]
 	}
 	return string(b)
-}
-
-func stringToUint32(in string) (uint32, error) {
-	if in == "" {
-		return 0, nil
-	}
-	i, err := strconv.ParseUint(in, 0, 32)
-	if err != nil {
-		return 0, err
-	}
-	return uint32(i), nil
 }

@@ -17,6 +17,7 @@ run: ## Run
 	go run -tags debug main.go $(RUN_ARGS)
 
 build: ## Build
+	mkdir -p bin
 	go build -tags debug -o bin/ezr2mqtt main.go
 
 vendor: ## Vendor

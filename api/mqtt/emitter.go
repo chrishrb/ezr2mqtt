@@ -8,7 +8,7 @@ import (
 	"sync"
 	"time"
 
-	"github.com/chrishrb/ezr2mqtt/internal/pubsub"
+	"github.com/chrishrb/ezr2mqtt/api"
 	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/paho"
 )
@@ -28,11 +28,12 @@ func NewEmitter(opts ...Opt[Emitter]) *Emitter {
 	return e
 }
 
-func (e *Emitter) Emit(ctx context.Context, receiverMask uint32, message *pubsub.Message) error {
-	topic := fmt.Sprintf("%s/out/%d", e.mqttPrefix, receiverMask)
+func (e *Emitter) Emit(ctx context.Context, id string, message *api.Message) error {
+	// e.g. ezr/id123/bedroom/state/temperature
+	t := fmt.Sprintf("%s/%s/%s/state/%s", e.mqttPrefix, id, message.Room, message.Type)
 	payload, err := json.Marshal(message)
 	if err != nil {
-		return fmt.Errorf("marshalling response of receiver %d: %v", receiverMask, err)
+		return fmt.Errorf("marshalling response of id %s: %v", id, err)
 	}
 
 	err = e.ensureConnection(ctx)
@@ -41,11 +42,11 @@ func (e *Emitter) Emit(ctx context.Context, receiverMask uint32, message *pubsub
 	}
 
 	_, err = e.conn.Publish(ctx, &paho.Publish{
-		Topic:   topic,
+		Topic:   t,
 		Payload: payload,
 	})
 	if err != nil {
-		return fmt.Errorf("publishing to %s: %v", topic, err)
+		return fmt.Errorf("publishing to %s: %v", t, err)
 	}
 	return nil
 }

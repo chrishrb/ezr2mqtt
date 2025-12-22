@@ -7,8 +7,8 @@ import (
 	"testing"
 	"time"
 
-	"github.com/chrishrb/ezr2mqtt/internal/pubsub"
-	mqtt2 "github.com/chrishrb/ezr2mqtt/internal/pubsub/mqtt"
+	"github.com/chrishrb/ezr2mqtt/api"
+	mqtt2 "github.com/chrishrb/ezr2mqtt/api/mqtt"
 	"github.com/eclipse/paho.golang/autopaho"
 	"github.com/eclipse/paho.golang/paho"
 	"github.com/stretchr/testify/assert"
@@ -31,15 +31,15 @@ func TestEmitterSendsMessage(t *testing.T) {
 
 	emitter := mqtt2.NewEmitter(
 		mqtt2.WithMqttBrokerUrl[mqtt2.Emitter](clientUrl),
-		mqtt2.WithMqttPrefix[mqtt2.Emitter]("hoval"))
+		mqtt2.WithMqttPrefix[mqtt2.Emitter]("ezr"))
 
 	// subscribe to the output channel
 	rcvdCh := make(chan struct{})
 
 	router := paho.NewStandardRouter()
-	router.RegisterHandler("hoval/out/1", func(publish *paho.Publish) {
-		assert.Equal(t, "hoval/out/1", publish.Topic)
-		var msg pubsub.Message
+	router.RegisterHandler("ezr/id123/bedroom/state/temperature", func(publish *paho.Publish) {
+		assert.Equal(t, "ezr/id123/bedroom/state/temperature", publish.Topic)
+		var msg api.Message
 		err := json.Unmarshal(publish.Payload, &msg)
 		assert.NoError(t, err, "payload is not the expected message type")
 		assert.Equal(t, 332, 332)
@@ -52,10 +52,12 @@ func TestEmitterSendsMessage(t *testing.T) {
 	}()
 
 	// publish a message to the input channel
-	msg := pubsub.Message{
-		Data: 332,
+	msg := api.Message{
+		Room: "bedroom",
+		Type: "temperature",
+		Data: 22,
 	}
-	err = emitter.Emit(context.Background(), 1, &msg)
+	err = emitter.Emit(context.Background(), "id123", &msg)
 	require.NoError(t, err)
 
 	// wait for success
@@ -76,7 +78,7 @@ func listenForMessageSentByManager(t *testing.T, ctx context.Context, clientUrl 
 			_, err := manager.Subscribe(context.Background(), &paho.Subscribe{
 				Subscriptions: []paho.SubscribeOptions{
 					{
-						Topic: "hoval/out/#",
+						Topic: "ezr/#",
 					},
 				},
 			})
