@@ -22,5 +22,6 @@ func setTemperatureTarget(client transport.Client, id string, message *api.Messa
 	if err != nil {
 		return fmt.Errorf("error sending temperature target: %w", err)
 	}
+
 	return nil
 }
