@@ -1,4 +1,4 @@
-package periodic
+package polling
 
 import (
 	"context"
@@ -11,7 +11,7 @@ import (
 	"github.com/chrishrb/ezr2mqtt/transport"
 )
 
-type PeriodicRequester struct {
+type Poller struct {
 	name     string
 	client   transport.Client
 	emitter  api.Emitter
@@ -19,14 +19,14 @@ type PeriodicRequester struct {
 	store    store.Store
 }
 
-func NewPeriodicRequester(
+func NewPoller(
 	name string,
 	client transport.Client,
 	emitter api.Emitter,
 	runEvery time.Duration,
 	store store.Store,
-) *PeriodicRequester {
-	return &PeriodicRequester{
+) *Poller {
+	return &Poller{
 		name:     name,
 		client:   client,
 		emitter:  emitter,
@@ -35,24 +35,39 @@ func NewPeriodicRequester(
 	}
 }
 
-func (r *PeriodicRequester) Run(ctx context.Context) {
-	go r.runOnce(ctx)
-	go r.run(ctx)
+func (r *Poller) Run(ctx context.Context) {
+	go r.pollOnce(ctx)
+	go r.pollPeriodic(ctx)
 }
 
-func (r *PeriodicRequester) runOnce(ctx context.Context) {
+func (r *Poller) pollOnce(ctx context.Context) {
 	res, err := r.client.Connect()
 	if err != nil {
-		slog.Error("error sending periodic message to static endpoint", "error", err)
+		slog.Error("error sending message to static endpoint", "error", err)
 	}
 
 	// Store device ID
 	r.store.SetID(r.name, res.Device.ID)
 
 	// Build json meta data
-	metaData := api.Meta{
-		Name: res.Device.Name,
+	rooms := make([]api.RoomDiscovery, len(res.Device.HeatAreas))
+	for i, h := range res.Device.HeatAreas {
+		rooms[i] = api.RoomDiscovery{
+			ID:   h.Nr,
+			Name: h.Name,
+		}
 	}
+
+	metaData := api.ClimateDiscovery{
+		// Identity
+		Name: res.Device.Name,
+		ID:   res.Device.ID,
+		Type: res.Device.Type,
+
+		// Rooms
+		Rooms: rooms,
+	}
+
 	jsonData, err := json.Marshal(metaData)
 	if err != nil {
 		slog.Error("error marshalling meta data", "error", err)
@@ -71,7 +86,7 @@ func (r *PeriodicRequester) runOnce(ctx context.Context) {
 	}
 }
 
-func (r *PeriodicRequester) run(ctx context.Context) {
+func (r *Poller) pollPeriodic(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():

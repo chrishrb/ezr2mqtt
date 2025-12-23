@@ -6,6 +6,17 @@ type Message struct {
 	Data any
 }
 
-type Meta struct {
-	Name string
+type RoomDiscovery struct {
+	ID   int    `json:"id"`
+	Name string `json:"name"`
+}
+
+type ClimateDiscovery struct {
+	// Identity
+	Name string `json:"name"`
+	ID   string `json:"id"`
+	Type string `json:"type"`
+
+	// Rooms
+	Rooms []RoomDiscovery `json:"rooms"`
 }
