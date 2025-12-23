@@ -19,7 +19,7 @@ jobs:
       run: make build
 
     - name: Run tests
-      run: make test
+      run: make e2e
 
     - name: Format
       run: |
@@ -33,4 +33,4 @@ jobs:
     - name: golangci-lint
       uses: golangci/golangci-lint-action@v9
       with:
-        version: v2.70
+        version: v2.60
