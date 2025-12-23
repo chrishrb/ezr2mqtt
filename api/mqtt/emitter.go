@@ -2,7 +2,6 @@ package mqtt
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
 	"sync"
@@ -31,19 +30,15 @@ func NewEmitter(opts ...Opt[Emitter]) *Emitter {
 func (e *Emitter) Emit(ctx context.Context, name string, message *api.Message) error {
 	// e.g. ezr/your-name/bedroom/state/temperature
 	t := fmt.Sprintf("%s/%s/%d/state/%s", e.mqttPrefix, name, message.Room, message.Type)
-	payload, err := json.Marshal(message)
-	if err != nil {
-		return fmt.Errorf("marshalling response of id %s: %v", name, err)
-	}
 
-	err = e.ensureConnection(ctx)
+	err := e.ensureConnection(ctx)
 	if err != nil {
 		return fmt.Errorf("connecting to MQTT: %v", err)
 	}
 
 	_, err = e.conn.Publish(ctx, &paho.Publish{
 		Topic:   t,
-		Payload: payload,
+		Payload: []byte(message.Data),
 	})
 	if err != nil {
 		return fmt.Errorf("publishing to %s: %v", t, err)

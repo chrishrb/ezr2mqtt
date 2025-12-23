@@ -43,7 +43,7 @@ func TestHandlerRouter_Handle_Success(t *testing.T) {
 	msg := &api.Message{
 		Room: 1,
 		Type: "temperature_target",
-		Data: 22.5,
+		Data: "22.5",
 	}
 
 	ctx := context.Background()
@@ -75,7 +75,7 @@ func TestHandlerRouter_Handle_NoClient(t *testing.T) {
 	msg := &api.Message{
 		Room: 1,
 		Type: "temperature_target",
-		Data: 22.5,
+		Data: "22.5",
 	}
 
 	ctx := context.Background()
@@ -98,7 +98,7 @@ func TestHandlerRouter_Handle_NoStoreID(t *testing.T) {
 	msg := &api.Message{
 		Room: 1,
 		Type: "temperature_target",
-		Data: 22.5,
+		Data: "22.5",
 	}
 
 	ctx := context.Background()
@@ -142,7 +142,7 @@ func TestHandlerRouter_Route_TemperatureTarget(t *testing.T) {
 	msg := &api.Message{
 		Room: 2,
 		Type: "temperature_target",
-		Data: 23.0,
+		Data: "23.0",
 	}
 
 	err := router.route(client, deviceID, msg)

@@ -67,7 +67,7 @@ func TestPoller_PollOnce_Success(t *testing.T) {
 
 	// Verify meta data structure
 	var metaData api.ClimateDiscovery
-	err := json.Unmarshal(emittedMessages[0].Data.([]byte), &metaData)
+	err := json.Unmarshal([]byte(emittedMessages[0].Data), &metaData)
 	assert.NoError(t, err)
 	assert.Equal(t, "Mock Device", metaData.Name)
 	assert.Equal(t, "MOCK-12345", metaData.ID)
@@ -119,15 +119,15 @@ func TestPoller_PollPeriodic_EmitsMessages(t *testing.T) {
 
 		if msg.Type == "temperature_target" {
 			targetFound = true
-			assert.IsType(t, float64(0), msg.Data)
+			assert.IsType(t, "19.00", msg.Data)
 		}
 		if msg.Type == "temperature_actual" {
 			actualFound = true
-			assert.IsType(t, float64(0), msg.Data)
+			assert.IsType(t, "19.00", msg.Data)
 		}
 		if msg.Type == "heatarea_mode" {
 			heatareaModeFound = true
-			assert.IsType(t, string("auto"), msg.Data)
+			assert.IsType(t, "auto", msg.Data)
 		}
 	}
 
@@ -246,19 +246,19 @@ func TestPoller_PollPeriodic_EmitsCorrectData(t *testing.T) {
 	for _, msg := range emittedMessages {
 		if msg.Room == 1 && msg.Type == "temperature_target" {
 			room1Target = true
-			assert.Equal(t, 22.0, msg.Data)
+			assert.Equal(t, "22.00", msg.Data)
 		}
 		if msg.Room == 1 && msg.Type == "temperature_actual" {
 			room1Actual = true
-			assert.Equal(t, 22.5, msg.Data)
+			assert.Equal(t, "22.50", msg.Data)
 		}
 		if msg.Room == 2 && msg.Type == "temperature_target" {
 			room2Target = true
-			assert.Equal(t, 20.0, msg.Data)
+			assert.Equal(t, "20.00", msg.Data)
 		}
 		if msg.Room == 2 && msg.Type == "temperature_actual" {
 			room2Actual = true
-			assert.Equal(t, 19.5, msg.Data)
+			assert.Equal(t, "19.50", msg.Data)
 		}
 	}
 

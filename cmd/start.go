@@ -61,6 +61,6 @@ var startCmd = &cobra.Command{
 func init() {
 	rootCmd.AddCommand(startCmd)
 
-	startCmd.Flags().StringVarP(&configFile, "config-file", "c", "/config/config.yaml",
+	startCmd.Flags().StringVarP(&configFile, "config-file", "c", "/config/ezr2mqtt.yaml",
 		"The config file to use")
 }

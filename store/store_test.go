@@ -91,7 +91,7 @@ func TestInMemoryStore_ThreadSafety(t *testing.T) {
 	n := 100
 
 	// Concurrent writes
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -102,7 +102,7 @@ func TestInMemoryStore_ThreadSafety(t *testing.T) {
 	}
 
 	// Concurrent reads
-	for i := 0; i < n; i++ {
+	for i := range n {
 		wg.Add(1)
 		go func(i int) {
 			defer wg.Done()
@@ -147,8 +147,8 @@ func TestInMemoryStore_ConcurrentReadWrite(t *testing.T) {
 	opsPerDevice := 10
 
 	// Create multiple devices concurrently
-	for i := 0; i < deviceCount; i++ {
-		for j := 0; j < opsPerDevice; j++ {
+	for i := range deviceCount {
+		for j := range opsPerDevice {
 			wg.Add(1)
 			go func(deviceNum, opNum int) {
 				defer wg.Done()
@@ -160,8 +160,8 @@ func TestInMemoryStore_ConcurrentReadWrite(t *testing.T) {
 	}
 
 	// Read concurrently while writing
-	for i := 0; i < deviceCount; i++ {
-		for j := 0; j < opsPerDevice; j++ {
+	for i := range deviceCount {
+		for range opsPerDevice {
 			wg.Add(1)
 			go func(deviceNum int) {
 				defer wg.Done()

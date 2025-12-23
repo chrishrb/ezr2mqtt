@@ -2,7 +2,6 @@ package mqtt_test
 
 import (
 	"context"
-	"encoding/json"
 	"net/url"
 	"testing"
 	"time"
@@ -39,10 +38,8 @@ func TestEmitterSendsMessage(t *testing.T) {
 	router := paho.NewStandardRouter()
 	router.RegisterHandler("ezr/name123/1/state/temperature", func(publish *paho.Publish) {
 		assert.Equal(t, "ezr/name123/1/state/temperature", publish.Topic)
-		var msg api.Message
-		err := json.Unmarshal(publish.Payload, &msg)
 		assert.NoError(t, err, "payload is not the expected message type")
-		assert.Equal(t, 332, 332)
+		assert.Equal(t, string(publish.Payload), "23.20")
 		rcvdCh <- struct{}{}
 	})
 	mqttClient := listenForMessageSentByManager(t, ctx, clientUrl, router)
@@ -55,7 +52,7 @@ func TestEmitterSendsMessage(t *testing.T) {
 	msg := api.Message{
 		Room: 1,
 		Type: "temperature",
-		Data: 22,
+		Data: api.FormatFloat(23.2),
 	}
 	err = emitter.Emit(context.Background(), "name123", &msg)
 	require.NoError(t, err)

@@ -2,7 +2,6 @@ package mqtt_test
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -33,7 +32,7 @@ func TestListenerProcessesMessagesReceivedFromTheBroker(t *testing.T) {
 		assert.Equal(t, "name123", name)
 		assert.Equal(t, 1, msg.Room)
 		assert.Equal(t, "temperature", msg.Type)
-		assert.Equal(t, 23.2, msg.Data)
+		assert.Equal(t, "23.20", msg.Data)
 		receivedMsgCh <- struct{}{}
 	}
 
@@ -49,11 +48,7 @@ func TestListenerProcessesMessagesReceivedFromTheBroker(t *testing.T) {
 	}()
 
 	// publish message
-	publishMessage(t, broker, api.Message{
-		Room: 1,
-		Type: "temperature",
-		Data: 23.2,
-	})
+	publishMessage(t, broker, api.FormatFloat(23.2))
 
 	// wait for message to be received / timeout
 	select {
@@ -64,19 +59,16 @@ func TestListenerProcessesMessagesReceivedFromTheBroker(t *testing.T) {
 	}
 }
 
-func publishMessage(t *testing.T, broker *server.Server, msg api.Message) {
-	msgBytes, err := json.Marshal(msg)
-	require.NoError(t, err)
-
+func publishMessage(t *testing.T, broker *server.Server, msg string) {
 	cl := broker.NewClient(nil, "local", "inline", true)
-	err = broker.InjectPacket(cl, packets.Packet{
+	err := broker.InjectPacket(cl, packets.Packet{
 		FixedHeader: packets.FixedHeader{
 			Type:   packets.Publish,
 			Qos:    0,
 			Retain: false,
 		},
-		TopicName: "ezr/name123/bedroom/set/temperature",
-		Payload:   msgBytes,
+		TopicName: "ezr/name123/1/set/temperature",
+		Payload:   []byte(msg),
 		PacketID:  uint16(0),
 	})
 	require.NoError(t, err)

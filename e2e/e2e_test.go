@@ -4,9 +4,10 @@ package e2e_test
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"net/url"
+	"strconv"
+	"strings"
 	"testing"
 	"time"
 
@@ -109,20 +110,13 @@ func TestE2E_SetTargetTemperatureOverMQTT(t *testing.T) {
 
 	// Prepare message to set target temperature
 	newTargetTemp := 23.5
-	msg := api.Message{
-		Room: roomNr,
-		Type: "temperature_target",
-		Data: newTargetTemp,
-	}
-	payload, err := json.Marshal(msg)
-	require.NoError(t, err)
 
 	// Publish temperature change to MQTT
 	// Topic format: ezr/{device_id}/{room_nr}/set/temperature_target
 	setTopic := fmt.Sprintf("%s/%s/%d/set/temperature_target", mqttPrefix, deviceName, roomNr)
 	_, err = testClient.Publish(ctx, &paho.Publish{
 		Topic:   setTopic,
-		Payload: payload,
+		Payload: []byte(api.FormatFloat(newTargetTemp)),
 	})
 	require.NoError(t, err)
 
@@ -253,13 +247,17 @@ collecting:
 	for len(receivedMessages) < expectedMinMessages {
 		select {
 		case msg := <-messageChan:
-			var apiMsg api.Message
-			err := json.Unmarshal(msg.Payload, &apiMsg)
-			if err != nil {
-				t.Logf("error unmarshaling message: %v", err)
-				continue
+			topicParts := strings.Split(msg.Topic, "/")
+
+			tp := topicParts[len(topicParts)-1]
+			room, err := strconv.Atoi(topicParts[len(topicParts)-3])
+			require.NoError(t, err)
+
+			receivedMessages[msg.Topic] = &api.Message{
+				Room: room,
+				Type: tp,
+				Data: string(msg.Payload),
 			}
-			receivedMessages[msg.Topic] = &apiMsg
 		case <-timeout:
 			break collecting
 		}
@@ -276,7 +274,7 @@ collecting:
 		if msg, ok := receivedMessages[targetTopic]; ok {
 			assert.Equal(t, heatArea.Nr, msg.Room, "Room number should match")
 			assert.Equal(t, "temperature_target", msg.Type, "Message type should be temperature_target")
-			assert.Equal(t, heatArea.TTarget, msg.Data.(float64), "Target temperature should match")
+			assert.Equal(t, api.FormatFloat(heatArea.TTarget), msg.Data, "Target temperature should match")
 		} else {
 			t.Errorf("Expected to receive temperature_target message for room %d on topic %s", heatArea.Nr, targetTopic)
 		}
@@ -286,7 +284,7 @@ collecting:
 		if msg, ok := receivedMessages[actualTopic]; ok {
 			assert.Equal(t, heatArea.Nr, msg.Room, "Room number should match")
 			assert.Equal(t, "temperature_actual", msg.Type, "Message type should be temperature_actual")
-			assert.Equal(t, heatArea.TActual, msg.Data.(float64), "Actual temperature should match")
+			assert.Equal(t, api.FormatFloat(heatArea.TActual), msg.Data, "Actual temperature should match")
 		} else {
 			t.Errorf("Expected to receive temperature_actual message for room %d on topic %s", heatArea.Nr, actualTopic)
 		}
@@ -296,7 +294,7 @@ collecting:
 		if msg, ok := receivedMessages[modeTopic]; ok {
 			assert.Equal(t, heatArea.Nr, msg.Room, "Room number should match")
 			assert.Equal(t, "heatarea_mode", msg.Type, "Message type should be heatarea_mode")
-			assert.Equal(t, "day", msg.Data.(string), "Heat area mode should match")
+			assert.Equal(t, "day", msg.Data, "Heat area mode should match")
 		} else {
 			t.Errorf("Expected to receive heatarea_mode message for room %d on topic %s", heatArea.Nr, modeTopic)
 		}
@@ -418,21 +416,12 @@ func TestE2E_SetModeOverMQTT(t *testing.T) {
 
 	for _, tc := range testCases {
 		t.Run(fmt.Sprintf("set_mode_%s", tc.mode), func(t *testing.T) {
-			// Prepare message to set mode
-			msg := api.Message{
-				Room: roomNr,
-				Type: "heatarea_mode",
-				Data: tc.mode,
-			}
-			payload, err := json.Marshal(msg)
-			require.NoError(t, err)
-
 			// Publish mode change to MQTT
 			// Topic format: ezr/{device_id}/{room_nr}/set/heatarea_mode
 			setTopic := fmt.Sprintf("%s/%s/%d/set/heatarea_mode", mqttPrefix, deviceName, roomNr)
 			_, err = testClient.Publish(ctx, &paho.Publish{
 				Topic:   setTopic,
-				Payload: payload,
+				Payload: []byte(tc.mode),
 			})
 			require.NoError(t, err)
 
@@ -599,18 +588,11 @@ func TestE2E_FullIntegration(t *testing.T) {
 
 	// Step 1: Set a new target temperature via MQTT
 	newTargetTemp := initialTargetTemp + 2.5
-	setMsg := api.Message{
-		Room: roomNr,
-		Type: "temperature_target",
-		Data: newTargetTemp,
-	}
-	payload, err := json.Marshal(setMsg)
-	require.NoError(t, err)
 
 	setTopic := fmt.Sprintf("%s/%s/%d/set/temperature_target", mqttPrefix, deviceName, roomNr)
 	_, err = testClient.Publish(ctx, &paho.Publish{
 		Topic:   setTopic,
-		Payload: payload,
+		Payload: []byte(api.FormatFloat(newTargetTemp)),
 	})
 	require.NoError(t, err)
 
@@ -625,13 +607,7 @@ func TestE2E_FullIntegration(t *testing.T) {
 		select {
 		case msg := <-messageChan:
 			if msg.Topic == expectedTopic {
-				var apiMsg api.Message
-				err := json.Unmarshal(msg.Payload, &apiMsg)
-				if err != nil {
-					t.Logf("error unmarshaling: %v", err)
-					continue
-				}
-				if apiMsg.Data.(float64) == newTargetTemp {
+				if string(msg.Payload) == api.FormatFloat(newTargetTemp) {
 					foundUpdatedTemp = true
 					t.Logf("Successfully received updated temperature: %.1f", newTargetTemp)
 				}

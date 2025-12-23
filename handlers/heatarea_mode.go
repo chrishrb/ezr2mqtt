@@ -10,7 +10,7 @@ import (
 func setHeatareaMode(client transport.Client, id string, message *api.Message) error {
 	var mode int
 
-	switch message.Data.(string) {
+	switch message.Data {
 	case "auto":
 		mode = 0
 	case "day":
@@ -18,7 +18,7 @@ func setHeatareaMode(client transport.Client, id string, message *api.Message) e
 	case "night":
 		mode = 2
 	default:
-		return fmt.Errorf("unknown heatarea mode: %s", message.Data.(string))
+		return fmt.Errorf("unknown heatarea mode: %s", message.Data)
 	}
 
 	msg := transport.Message{

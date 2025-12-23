@@ -1,9 +1,11 @@
 package api
 
+import "fmt"
+
 type Message struct {
 	Room int
 	Type string
-	Data any
+	Data string
 }
 
 type RoomDiscovery struct {
@@ -19,4 +21,8 @@ type ClimateDiscovery struct {
 
 	// Rooms
 	Rooms []RoomDiscovery `json:"rooms"`
+}
+
+func FormatFloat(f float64) string {
+	return fmt.Sprintf("%.2f", f)
 }

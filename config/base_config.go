@@ -21,7 +21,7 @@ var DefaultConfig = BaseConfig{
 	Api: ApiSettingsConfig{
 		Type: "mqtt",
 		Mqtt: &MqttSettingsConfig{
-			Urls:              []string{"tcp://mqtt:1883"},
+			Urls:              []string{"mqtt://mqtt:1883"},
 			Prefix:            "ezr",
 			Group:             "ezr2mqtt",
 			ConnectTimeout:    "10s",

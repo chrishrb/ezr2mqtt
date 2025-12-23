@@ -75,7 +75,7 @@ func (r *Poller) pollOnce(ctx context.Context) {
 	}
 
 	// Emit meta data (0 for complete floor)
-	r.sendMsg(ctx, 0, "meta", jsonData)
+	r.sendMsg(ctx, 0, "meta", string(jsonData))
 }
 
 func (r *Poller) pollPeriodic(ctx context.Context) {
@@ -91,8 +91,8 @@ func (r *Poller) pollPeriodic(ctx context.Context) {
 			}
 
 			for _, h := range res.Device.HeatAreas {
-				r.sendMsg(ctx, h.Nr, "temperature_target", h.TTarget)
-				r.sendMsg(ctx, h.Nr, "temperature_actual", h.TActual)
+				r.sendMsg(ctx, h.Nr, "temperature_target", api.FormatFloat(h.TTarget))
+				r.sendMsg(ctx, h.Nr, "temperature_actual", api.FormatFloat(h.TActual))
 
 				mode, err := getHeatAreaMode(h.Mode)
 				if err == nil {
@@ -105,7 +105,7 @@ func (r *Poller) pollPeriodic(ctx context.Context) {
 	}
 }
 
-func (r *Poller) sendMsg(ctx context.Context, room int, t string, data any) {
+func (r *Poller) sendMsg(ctx context.Context, room int, t string, data string) {
 	msg := &api.Message{
 		Room: room,
 		Type: t,

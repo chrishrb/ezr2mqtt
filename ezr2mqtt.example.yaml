@@ -1,0 +1,12 @@
+api:
+  type: mqtt
+  mqtt:
+    urls:
+      - mqtt://myuser:mypass@mqtt.example.com:1883
+
+ezr:
+  - host: EZR01A3AF.lan
+    name: EG
+
+general:
+  poll_every: 60s

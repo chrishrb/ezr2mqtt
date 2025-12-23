@@ -2,12 +2,12 @@ package mqtt
 
 import (
 	"context"
-	"encoding/json"
 	"errors"
 	"fmt"
 	"log/slog"
 	"math/rand"
 	"net/url"
+	"strconv"
 	"strings"
 	"time"
 
@@ -86,16 +86,20 @@ func (l *Listener) Connect(ctx context.Context, handler api.MessageHandler) (api
 			mqttRouter.RegisterHandler(topic, func(mqttMsg *paho.Publish) {
 				ctx := context.Background()
 
-				// determine name - ezr/name123/bedroom/set/temperature
+				// determine parts - ezr/name123/bedroom/set/temperature
 				topicParts := strings.Split(mqttMsg.Topic, "/")
-				name := topicParts[len(topicParts)-4]
 
-				// unmarshal the message
-				var msg api.Message
-				err = json.Unmarshal(mqttMsg.Payload, &msg)
+				name := topicParts[len(topicParts)-4]
+				t := topicParts[len(topicParts)-1]
+				room, err := strconv.Atoi(topicParts[len(topicParts)-3])
 				if err != nil {
-					slog.Warn("unable to unmarshal message", "err", err)
-					return
+					slog.Error("invalid room number in topic", "topic", mqttMsg.Topic)
+				}
+
+				msg := api.Message{
+					Room: room,
+					Type: t,
+					Data: string(mqttMsg.Payload),
 				}
 
 				// execute the handler
