@@ -6,45 +6,48 @@ import (
 	"log/slog"
 
 	"github.com/chrishrb/ezr2mqtt/api"
+	"github.com/chrishrb/ezr2mqtt/store"
 	"github.com/chrishrb/ezr2mqtt/transport"
 )
 
 type HandlerRouter struct {
-	client transport.Client
+	client map[string]transport.Client
+	store  store.Store
 }
 
-func NewHandlerRouter(client transport.Client) *HandlerRouter {
+func NewHandlerRouter(client map[string]transport.Client, store store.Store) *HandlerRouter {
 	return &HandlerRouter{
 		client: client,
+		store:  store,
 	}
 }
 
-func (s *HandlerRouter) Handle(ctx context.Context, id string, message *api.Message) {
+func (s *HandlerRouter) Handle(ctx context.Context, name string, message *api.Message) {
 	var err error
 
-	switch message.Type {
-	case "temperature_target":
-		err = s.setTemperatureTarget(id, message)
+	client, ok := s.client[name]
+	if !ok {
+		slog.Error("no transport client found for device", "device_name", name)
+		return
 	}
 
+	id := s.store.GetID(name)
+	if id == nil {
+		slog.Error("no periodic store ID found for device", "device_name", name)
+		return
+	}
+
+	err = s.route(client, *id, message)
 	if err != nil {
-		slog.Error("error handling message", "error", err, "device_id", id, "message_type", message.Type)
+		slog.Error("error handling message", "error", err, "device_name", name, "message_type", message.Type)
 	}
 }
 
-func (s *HandlerRouter) setTemperatureTarget(id string, message *api.Message) error {
-	msg := transport.Message{
-		Device: transport.Device{
-			ID: id,
-			HeatAreas: []transport.HeatArea{{
-				Nr:      message.Room,
-				TTarget: message.Data.(float64),
-			}},
-		},
+func (s *HandlerRouter) route(client transport.Client, id string, message *api.Message) error {
+	switch message.Type {
+	case "temperature_target":
+		return setTemperatureTarget(client, id, message)
+	default:
+		return fmt.Errorf("unknown message type: %s", message.Type)
 	}
-	err := s.client.Send(&msg)
-	if err != nil {
-		return fmt.Errorf("error sending temperature target: %w", err)
-	}
-	return nil
 }

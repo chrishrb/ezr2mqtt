@@ -39,7 +39,9 @@ var startCmd = &cobra.Command{
 
 		// Start periodic requests
 		periodicRequester := settings.PeriodicRequester
-		periodicRequester.Run(context.Background())
+		for _, pr := range periodicRequester {
+			pr.Run(context.Background())
+		}
 
 		slog.Info("ezr2mqtt started")
 

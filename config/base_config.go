@@ -10,10 +10,9 @@ import (
 )
 
 type BaseConfig struct {
-	Api ApiSettingsConfig `mapstructure:"api" json:"api" validate:"required"`
-	// TODO: make possible to have multiple transport configs
-	Ezr     EzrConfig     `mapstructure:"ezr" json:"ezr" validate:"required"`
-	General GeneralConfig `mapstructure:"general" json:"general" validate:"required"`
+	Api     ApiSettingsConfig `mapstructure:"api" json:"api" validate:"required"`
+	Ezr     []EzrConfig       `mapstructure:"ezr" json:"ezr" validate:"required"`
+	General GeneralConfig     `mapstructure:"general" json:"general" validate:"required"`
 }
 
 // DefaultConfig provides the default configuration. The configuration
@@ -30,9 +29,10 @@ var DefaultConfig = BaseConfig{
 			KeepAliveInterval: "60s",
 		},
 	},
-	Ezr: EzrConfig{
+	Ezr: []EzrConfig{{
+		Name: "ezr-mock",
 		Type: "mock",
-	},
+	}},
 	General: GeneralConfig{
 		PollEvery: "1m",
 	},

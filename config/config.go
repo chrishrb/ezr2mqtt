@@ -10,17 +10,19 @@ import (
 	"github.com/chrishrb/ezr2mqtt/api/mqtt"
 	"github.com/chrishrb/ezr2mqtt/handlers"
 	"github.com/chrishrb/ezr2mqtt/periodic"
+	"github.com/chrishrb/ezr2mqtt/store"
 	"github.com/chrishrb/ezr2mqtt/transport"
 	"github.com/chrishrb/ezr2mqtt/transport/http"
 	"github.com/chrishrb/ezr2mqtt/transport/mock"
 )
 
 type Config struct {
-	EzrClient         transport.Client
+	Store             store.Store
+	EzrClient         map[string]transport.Client
 	MqttListener      api.Listener
 	MqttEmitter       api.Emitter
 	MqttHandler       api.MessageHandler
-	PeriodicRequester *periodic.PeriodicRequester
+	PeriodicRequester []*periodic.PeriodicRequester
 }
 
 func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
@@ -31,9 +33,14 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 
 	c = &Config{}
 
-	c.EzrClient, err = getEzrClient(cfg.Ezr)
-	if err != nil {
-		return nil, err
+	c.Store = store.NewInMemoryStore()
+
+	c.EzrClient = make(map[string]transport.Client)
+	for _, ezrCfg := range cfg.Ezr {
+		c.EzrClient[ezrCfg.Name], err = getEzrClient(ezrCfg)
+		if err != nil {
+			return nil, err
+		}
 	}
 
 	c.MqttListener, err = getMqttReceiver(cfg.Api)
@@ -46,9 +53,9 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, err
 	}
 
-	c.MqttHandler = handlers.NewHandlerRouter(c.EzrClient)
+	c.MqttHandler = handlers.NewHandlerRouter(c.EzrClient, c.Store)
 
-	c.PeriodicRequester, err = getPeriodicRequester(c.EzrClient, c.MqttEmitter, cfg.General)
+	c.PeriodicRequester, err = getPeriodicRequesters(c.EzrClient, c.MqttEmitter, c.Store, cfg)
 	if err != nil {
 		return nil, err
 	}
@@ -144,11 +151,16 @@ func getMqttEmitter(cfg ApiSettingsConfig) (api.Emitter, error) {
 	}
 }
 
-func getPeriodicRequester(client transport.Client, emitter api.Emitter, cfg GeneralConfig) (*periodic.PeriodicRequester, error) {
-	runEvery, err := time.ParseDuration(cfg.PollEvery)
+func getPeriodicRequesters(clients map[string]transport.Client, emitter api.Emitter, store store.Store, cfg *BaseConfig) ([]*periodic.PeriodicRequester, error) {
+	runEvery, err := time.ParseDuration(cfg.General.PollEvery)
 	if err != nil {
 		return nil, fmt.Errorf("failed to parse periodic PollEvery: %w", err)
 	}
 
-	return periodic.NewPeriodicRequester(client, emitter, runEvery), nil
+	periodicRequesters := make([]*periodic.PeriodicRequester, len(cfg.Ezr))
+	for i, ezrCfg := range cfg.Ezr {
+		periodicRequesters[i] = periodic.NewPeriodicRequester(ezrCfg.Name, clients[ezrCfg.Name], emitter, runEvery, store)
+	}
+
+	return periodicRequesters, nil
 }

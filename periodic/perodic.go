@@ -7,33 +7,47 @@ import (
 	"time"
 
 	"github.com/chrishrb/ezr2mqtt/api"
+	"github.com/chrishrb/ezr2mqtt/store"
 	"github.com/chrishrb/ezr2mqtt/transport"
 )
 
 type PeriodicRequester struct {
+	name     string
 	client   transport.Client
 	emitter  api.Emitter
 	runEvery time.Duration
+	store    store.Store
 }
 
-func NewPeriodicRequester(client transport.Client, emitter api.Emitter, runEvery time.Duration) *PeriodicRequester {
+func NewPeriodicRequester(
+	name string,
+	client transport.Client,
+	emitter api.Emitter,
+	runEvery time.Duration,
+	store store.Store,
+) *PeriodicRequester {
 	return &PeriodicRequester{
+		name:     name,
 		client:   client,
 		emitter:  emitter,
 		runEvery: runEvery,
+		store:    store,
 	}
 }
 
 func (r *PeriodicRequester) Run(ctx context.Context) {
-	go runOnce(ctx, r.client, r.emitter)
-	go run(ctx, r.client, r.emitter, r.runEvery)
+	go r.runOnce(ctx)
+	go r.run(ctx)
 }
 
-func runOnce(ctx context.Context, client transport.Client, emitter api.Emitter) {
-	res, err := client.Connect()
+func (r *PeriodicRequester) runOnce(ctx context.Context) {
+	res, err := r.client.Connect()
 	if err != nil {
 		slog.Error("error sending periodic message to static endpoint", "error", err)
 	}
+
+	// Store device ID
+	r.store.SetID(r.name, res.Device.ID)
 
 	// Build json meta data
 	metaData := api.Meta{
@@ -51,20 +65,20 @@ func runOnce(ctx context.Context, client transport.Client, emitter api.Emitter) 
 		Type: "meta",
 		Data: jsonData,
 	}
-	err = emitter.Emit(ctx, id, msg)
+	err = r.emitter.Emit(ctx, id, msg)
 	if err != nil {
 		slog.Error("error emitting meta data message", "error", err)
 	}
 }
 
-func run(ctx context.Context, client transport.Client, emitter api.Emitter, runEvery time.Duration) {
+func (r *PeriodicRequester) run(ctx context.Context) {
 	for {
 		select {
 		case <-ctx.Done():
 			slog.Info("shutting down run periodic")
 			return
-		case <-time.After(runEvery):
-			res, err := client.Connect()
+		case <-time.After(r.runEvery):
+			res, err := r.client.Connect()
 			if err != nil {
 				slog.Error("error sending periodic message to static endpoint", "error", err)
 			}
@@ -77,7 +91,7 @@ func run(ctx context.Context, client transport.Client, emitter api.Emitter, runE
 					Type: "temperature_target",
 					Data: h.TTarget,
 				}
-				err = emitter.Emit(ctx, id, msg)
+				err = r.emitter.Emit(ctx, id, msg)
 				if err != nil {
 					slog.Error("error emitting periodic temperature_target message", "error", err)
 				}
@@ -87,7 +101,7 @@ func run(ctx context.Context, client transport.Client, emitter api.Emitter, runE
 					Type: "temperature_actual",
 					Data: h.TActual,
 				}
-				err = emitter.Emit(ctx, id, msg)
+				err = r.emitter.Emit(ctx, id, msg)
 				if err != nil {
 					slog.Error("error emitting periodic temperature_actual message", "error", err)
 				}
