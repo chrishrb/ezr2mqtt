@@ -81,7 +81,7 @@ func TestPoller_PollOnce_Success(t *testing.T) {
 	assert.Equal(t, "Bedroom", metaData.Rooms[1].Name)
 }
 
-func TestPoller_PollPeriodic_EmitsTemperatures(t *testing.T) {
+func TestPoller_PollPeriodic_EmitsMessages(t *testing.T) {
 	client := mock.NewMockClient()
 	store := store.NewInMemoryStore()
 	deviceName := "test-device"
@@ -111,10 +111,11 @@ func TestPoller_PollPeriodic_EmitsTemperatures(t *testing.T) {
 	// Verify message types and structure
 	targetFound := false
 	actualFound := false
+	heatareaModeFound := false
 
 	for i, msg := range emittedMessages {
 		assert.Equal(t, deviceName, emittedIDs[i])
-		assert.Contains(t, []string{"temperature_target", "temperature_actual"}, msg.Type)
+		assert.Contains(t, []string{"temperature_target", "temperature_actual", "heatarea_mode"}, msg.Type)
 
 		if msg.Type == "temperature_target" {
 			targetFound = true
@@ -124,10 +125,15 @@ func TestPoller_PollPeriodic_EmitsTemperatures(t *testing.T) {
 			actualFound = true
 			assert.IsType(t, float64(0), msg.Data)
 		}
+		if msg.Type == "heatarea_mode" {
+			heatareaModeFound = true
+			assert.IsType(t, string("auto"), msg.Data)
+		}
 	}
 
 	assert.True(t, targetFound, "Should emit temperature_target messages")
 	assert.True(t, actualFound, "Should emit temperature_actual messages")
+	assert.True(t, heatareaModeFound, "Should emit heatarea_mode messages")
 }
 
 func TestPoller_PollPeriodic_ContextCancellation(t *testing.T) {

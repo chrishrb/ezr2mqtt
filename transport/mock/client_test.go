@@ -397,6 +397,108 @@ func TestSend_ZeroValuesDoNotOverwrite(t *testing.T) {
 	}
 }
 
+func TestSend_UpdateHeatAreaMode_ZeroValue(t *testing.T) {
+	client := NewMockClient()
+
+	// Get initial state - heat area 1 has Mode=1 (day mode)
+	initial, _ := client.Connect()
+	heatArea1 := findHeatAreaByNr(initial.Device.HeatAreas, 1)
+	if heatArea1 == nil {
+		t.Fatal("Heat area #1 not found in initial state")
+	}
+
+	if heatArea1.Mode != 1 {
+		t.Fatalf("Expected initial Mode to be 1, got %d", heatArea1.Mode)
+	}
+
+	// Update heat area mode to 0 (auto mode)
+	// This is the critical test case - zero values SHOULD be applied for Nr-matched elements
+	updateMsg := &transport.Message{
+		Device: transport.Device{
+			HeatAreas: []transport.HeatArea{
+				{
+					Nr:   1,
+					Mode: 0, // Setting to 0 (auto mode)
+				},
+			},
+		},
+	}
+
+	err := client.Send(updateMsg)
+	if err != nil {
+		t.Fatalf("Send returned error: %v", err)
+	}
+
+	// Verify mode WAS updated to 0 (even though it's a zero value)
+	heatArea1After := findHeatAreaByNr(client.currentMessage.Device.HeatAreas, 1)
+	if heatArea1After == nil {
+		t.Fatal("Heat area #1 not found after update")
+	}
+
+	if heatArea1After.Mode != 0 {
+		t.Errorf("Expected Mode to be updated to 0 (auto), got %d", heatArea1After.Mode)
+	}
+
+	// Verify other fields remain unchanged
+	if heatArea1After.Name != "Living Room" {
+		t.Errorf("Expected Name to remain 'Living Room', got '%s'", heatArea1After.Name)
+	}
+
+	if heatArea1After.TTarget != 22.0 {
+		t.Errorf("Expected TTarget to remain 22.0, got %f", heatArea1After.TTarget)
+	}
+}
+
+func TestSend_UpdateHeatAreaMode_AllModes(t *testing.T) {
+	client := NewMockClient()
+
+	testCases := []struct {
+		name         string
+		mode         int
+		expectedMode int
+	}{
+		{"auto mode", 0, 0},
+		{"day mode", 1, 1},
+		{"night mode", 2, 2},
+	}
+
+	for _, tc := range testCases {
+		t.Run(tc.name, func(t *testing.T) {
+			// Update heat area 2 mode
+			updateMsg := &transport.Message{
+				Device: transport.Device{
+					HeatAreas: []transport.HeatArea{
+						{
+							Nr:   2,
+							Mode: tc.mode,
+						},
+					},
+				},
+			}
+
+			err := client.Send(updateMsg)
+			if err != nil {
+				t.Fatalf("Send returned error: %v", err)
+			}
+
+			// Verify mode was updated
+			heatArea2 := findHeatAreaByNr(client.currentMessage.Device.HeatAreas, 2)
+			if heatArea2 == nil {
+				t.Fatal("Heat area #2 not found")
+			}
+
+			if heatArea2.Mode != tc.expectedMode {
+				t.Errorf("Expected Mode to be %d, got %d", tc.expectedMode, heatArea2.Mode)
+			}
+
+			// Verify other fields remain unchanged
+			if heatArea2.Name != "Bedroom" {
+				t.Errorf("Expected Name to remain 'Bedroom', got '%s'", heatArea2.Name)
+			}
+		})
+	}
+}
+
 func TestSend_NilMessage(t *testing.T) {
 	client := NewMockClient()
 

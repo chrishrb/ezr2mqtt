@@ -47,6 +47,8 @@ func (s *HandlerRouter) route(client transport.Client, id string, message *api.M
 	switch message.Type {
 	case "temperature_target":
 		return setTemperatureTarget(client, id, message)
+	case "heatarea_mode":
+		return setHeatareaMode(client, id, message)
 	default:
 		return fmt.Errorf("unknown message type: %s", message.Type)
 	}

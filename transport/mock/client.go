@@ -375,11 +375,70 @@ func mergeSlicesByNr(target, source reflect.Value) {
 		nr := int(sourceElem.FieldByName("Nr").Int())
 
 		if targetElem, exists := targetMap[nr]; exists {
-			// Update existing element
-			mergeStructs(targetElem, sourceElem)
+			// Update existing element - use special merge for elements matched by Nr
+			mergeStructsByNr(targetElem, sourceElem)
 		} else {
 			// Append new element
 			target.Set(reflect.Append(target, sourceElem))
+		}
+	}
+}
+
+// mergeStructsByNr merges structs that were matched by Nr field
+// For these structs, we merge non-zero values, plus specific fields that should allow zero
+func mergeStructsByNr(target, source reflect.Value) {
+	if !target.IsValid() || !source.IsValid() {
+		return
+	}
+
+	if source.Kind() != reflect.Struct {
+		return
+	}
+
+	// Fields that should be merged even when zero
+	// These are fields where 0 is a valid meaningful value
+	zeroAllowedFields := map[string]bool{
+		"Mode":  true, // Heat area mode: 0=auto, 1=day, 2=night
+		"State": true, // Various state fields where 0 is valid
+		"Actor": true, // Actor percentage can be 0
+	}
+
+	for i := 0; i < source.NumField(); i++ {
+		sourceField := source.Field(i)
+		targetField := target.Field(i)
+		fieldName := source.Type().Field(i).Name
+
+		if !targetField.CanSet() {
+			continue
+		}
+
+		// Skip the Nr field itself to avoid changing the identifier
+		if fieldName == "Nr" {
+			continue
+		}
+
+		// For fields in Nr-matched structs, apply different rules
+		switch sourceField.Kind() {
+		case reflect.Struct:
+			mergeStructs(targetField, sourceField)
+		case reflect.Slice:
+			if sourceField.Len() > 0 {
+				targetField.Set(sourceField)
+			}
+		case reflect.String:
+			if sourceField.String() != "" {
+				targetField.SetString(sourceField.String())
+			}
+		case reflect.Int, reflect.Int8, reflect.Int16, reflect.Int32, reflect.Int64:
+			// Always set if non-zero, or if it's a field that allows zero values
+			if sourceField.Int() != 0 || zeroAllowedFields[fieldName] {
+				targetField.SetInt(sourceField.Int())
+			}
+		case reflect.Float32, reflect.Float64:
+			// Always set if non-zero, or if it's a field that allows zero values
+			if sourceField.Float() != 0.0 || zeroAllowedFields[fieldName] {
+				targetField.SetFloat(sourceField.Float())
+			}
 		}
 	}
 }

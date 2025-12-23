@@ -243,10 +243,11 @@ func TestE2E_TemperaturePublishedToMQTT(t *testing.T) {
 	receivedMessages := make(map[string]*api.Message)
 	timeout := time.After(3 * time.Second)
 
-	// We expect to receive messages for each heat area (2 in mock)
-	// For each area: temperature_target and temperature_actual
-	// Plus one meta message
-	expectedMinMessages := 5 // 1 meta + 2 rooms * 2 temperature types
+	// Define expected message types per heat area
+	expectedMessageTypes := []string{"temperature_target", "temperature_actual", "heatarea_mode"}
+	numRooms := len(initialMsg.Device.HeatAreas)
+	numMetaMessages := 1
+	expectedMinMessages := numMetaMessages + (numRooms * len(expectedMessageTypes))
 
 collecting:
 	for len(receivedMessages) < expectedMinMessages {
@@ -268,8 +269,9 @@ collecting:
 	assert.GreaterOrEqual(t, len(receivedMessages), expectedMinMessages,
 		"Should receive at least %d messages (meta + temperature data)", expectedMinMessages)
 
-	// Verify temperature_target messages for each room
+	// Verify messages for each room
 	for _, heatArea := range initialMsg.Device.HeatAreas {
+		// Verify temperature_target
 		targetTopic := fmt.Sprintf("%s/%s/%d/state/temperature_target", mqttPrefix, deviceName, heatArea.Nr)
 		if msg, ok := receivedMessages[targetTopic]; ok {
 			assert.Equal(t, heatArea.Nr, msg.Room, "Room number should match")
@@ -279,7 +281,7 @@ collecting:
 			t.Errorf("Expected to receive temperature_target message for room %d on topic %s", heatArea.Nr, targetTopic)
 		}
 
-		// Verify temperature_actual messages
+		// Verify temperature_actual
 		actualTopic := fmt.Sprintf("%s/%s/%d/state/temperature_actual", mqttPrefix, deviceName, heatArea.Nr)
 		if msg, ok := receivedMessages[actualTopic]; ok {
 			assert.Equal(t, heatArea.Nr, msg.Room, "Room number should match")
@@ -287,6 +289,16 @@ collecting:
 			assert.Equal(t, heatArea.TActual, msg.Data.(float64), "Actual temperature should match")
 		} else {
 			t.Errorf("Expected to receive temperature_actual message for room %d on topic %s", heatArea.Nr, actualTopic)
+		}
+
+		// Verify heatarea_mode
+		modeTopic := fmt.Sprintf("%s/%s/%d/state/heatarea_mode", mqttPrefix, deviceName, heatArea.Nr)
+		if msg, ok := receivedMessages[modeTopic]; ok {
+			assert.Equal(t, heatArea.Nr, msg.Room, "Room number should match")
+			assert.Equal(t, "heatarea_mode", msg.Type, "Message type should be heatarea_mode")
+			assert.Equal(t, "day", msg.Data.(string), "Heat area mode should match")
+		} else {
+			t.Errorf("Expected to receive heatarea_mode message for room %d on topic %s", heatArea.Nr, modeTopic)
 		}
 	}
 
@@ -299,6 +311,153 @@ collecting:
 	} else {
 		t.Errorf("Expected to receive meta message on topic %s", metaTopic)
 	}
+}
+
+func TestE2E_SetModeOverMQTT(t *testing.T) {
+	// Start MQTT broker
+	broker, brokerURL := mqtt.NewBroker(t)
+	go func() {
+		err := broker.Serve()
+		if err != nil {
+			t.Logf("broker serve error: %v", err)
+		}
+	}()
+	defer func() {
+		err := broker.Close()
+		if err != nil {
+			t.Logf("broker close error: %v", err)
+		}
+	}()
+
+	// Wait for broker to be ready
+	time.Sleep(100 * time.Millisecond)
+
+	const (
+		deviceName = "test-device"
+		mqttPrefix = "ezr"
+		roomNr     = 1
+	)
+
+	// Create mock EZR client
+	mockClient := mock.NewMockClient()
+
+	// Create store
+	memStore := store.NewInMemoryStore()
+
+	// Get initial state to store device ID
+	initialMsg, err := mockClient.Connect()
+	require.NoError(t, err)
+	memStore.SetID(deviceName, initialMsg.Device.ID)
+
+	// Get initial mode for room 1
+	var initialMode int
+	for _, ha := range initialMsg.Device.HeatAreas {
+		if ha.Nr == roomNr {
+			initialMode = ha.Mode
+			break
+		}
+	}
+
+	// Create handler router
+	clients := map[string]transport.Client{
+		deviceName: mockClient,
+	}
+	handlerRouter := handlers.NewHandlerRouter(clients, memStore)
+
+	// Create MQTT listener
+	listener := mqtt.NewListener(
+		mqtt.WithMqttBrokerUrl[mqtt.Listener](brokerURL),
+		mqtt.WithMqttPrefix[mqtt.Listener](mqttPrefix),
+	)
+
+	// Connect listener
+	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	defer cancel()
+
+	conn, err := listener.Connect(ctx, handlerRouter)
+	require.NoError(t, err)
+	defer func() {
+		err := conn.Disconnect(context.Background())
+		if err != nil {
+			t.Logf("disconnect error: %v", err)
+		}
+	}()
+
+	// Give listener time to subscribe
+	time.Sleep(200 * time.Millisecond)
+
+	// Create a test MQTT client to publish mode change
+	testClient, err := autopaho.NewConnection(context.Background(), autopaho.ClientConfig{
+		BrokerUrls:        []*url.URL{brokerURL},
+		KeepAlive:         10,
+		ConnectRetryDelay: 1 * time.Second,
+		ClientConfig: paho.ClientConfig{
+			ClientID: "test-client",
+		},
+	})
+	require.NoError(t, err)
+	defer func() {
+		err := testClient.Disconnect(context.Background())
+		if err != nil {
+			t.Logf("test client disconnect error: %v", err)
+		}
+	}()
+
+	err = testClient.AwaitConnection(ctx)
+	require.NoError(t, err)
+
+	// Test each mode: auto, day, night
+	testCases := []struct {
+		mode         string
+		expectedMode int
+	}{
+		{"night", 2},
+		{"auto", 0},
+		{"day", 1},
+	}
+
+	for _, tc := range testCases {
+		t.Run(fmt.Sprintf("set_mode_%s", tc.mode), func(t *testing.T) {
+			// Prepare message to set mode
+			msg := api.Message{
+				Room: roomNr,
+				Type: "heatarea_mode",
+				Data: tc.mode,
+			}
+			payload, err := json.Marshal(msg)
+			require.NoError(t, err)
+
+			// Publish mode change to MQTT
+			// Topic format: ezr/{device_id}/{room_nr}/set/heatarea_mode
+			setTopic := fmt.Sprintf("%s/%s/%d/set/heatarea_mode", mqttPrefix, deviceName, roomNr)
+			_, err = testClient.Publish(ctx, &paho.Publish{
+				Topic:   setTopic,
+				Payload: payload,
+			})
+			require.NoError(t, err)
+
+			// Wait for message to be processed
+			time.Sleep(300 * time.Millisecond)
+
+			// Verify the mode was set in the mock client
+			updatedMsg, err := mockClient.Connect()
+			require.NoError(t, err)
+
+			// Find the heat area and verify mode
+			var found bool
+			for _, heatArea := range updatedMsg.Device.HeatAreas {
+				if heatArea.Nr == roomNr {
+					assert.Equal(t, tc.expectedMode, heatArea.Mode, "Mode should be updated to %s (%d)", tc.mode, tc.expectedMode)
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "Heat area %d should exist", roomNr)
+		})
+	}
+
+	// Verify initial mode is still accessible (restore if needed)
+	t.Logf("Initial mode was: %d", initialMode)
 }
 
 func TestE2E_FullIntegration(t *testing.T) {

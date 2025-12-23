@@ -3,6 +3,7 @@ package polling
 import (
 	"context"
 	"encoding/json"
+	"fmt"
 	"log/slog"
 	"time"
 
@@ -73,16 +74,8 @@ func (r *Poller) pollOnce(ctx context.Context) {
 		slog.Error("error marshalling meta data", "error", err)
 	}
 
-	// Emit meta data
-	msg := &api.Message{
-		Room: 0, // for complete floor
-		Type: "meta",
-		Data: jsonData,
-	}
-	err = r.emitter.Emit(ctx, r.name, msg)
-	if err != nil {
-		slog.Error("error emitting meta data message", "error", err)
-	}
+	// Emit meta data (0 for complete floor)
+	r.sendMsg(ctx, 0, "meta", jsonData)
 }
 
 func (r *Poller) pollPeriodic(ctx context.Context) {
@@ -98,26 +91,41 @@ func (r *Poller) pollPeriodic(ctx context.Context) {
 			}
 
 			for _, h := range res.Device.HeatAreas {
-				msg := &api.Message{
-					Room: h.Nr,
-					Type: "temperature_target",
-					Data: h.TTarget,
-				}
-				err = r.emitter.Emit(ctx, r.name, msg)
-				if err != nil {
-					slog.Error("error emitting periodic temperature_target message", "error", err)
-				}
+				r.sendMsg(ctx, h.Nr, "temperature_target", h.TTarget)
+				r.sendMsg(ctx, h.Nr, "temperature_actual", h.TActual)
 
-				msg = &api.Message{
-					Room: h.Nr,
-					Type: "temperature_actual",
-					Data: h.TActual,
-				}
-				err = r.emitter.Emit(ctx, r.name, msg)
-				if err != nil {
-					slog.Error("error emitting periodic temperature_actual message", "error", err)
+				mode, err := getHeatAreaMode(h.Mode)
+				if err == nil {
+					r.sendMsg(ctx, h.Nr, "heatarea_mode", mode)
+				} else {
+					slog.Error("error getting heat area mode", "error", err)
 				}
 			}
 		}
+	}
+}
+
+func (r *Poller) sendMsg(ctx context.Context, room int, t string, data any) {
+	msg := &api.Message{
+		Room: room,
+		Type: t,
+		Data: data,
+	}
+	err := r.emitter.Emit(ctx, r.name, msg)
+	if err != nil {
+		slog.Error("error emitting periodic message", "type", t, "error", err)
+	}
+}
+
+func getHeatAreaMode(mode int) (string, error) {
+	switch mode {
+	case 0:
+		return "auto", nil
+	case 1:
+		return "day", nil
+	case 2:
+		return "night", nil
+	default:
+		return "", fmt.Errorf("unknown heat area mode: %d", mode)
 	}
 }

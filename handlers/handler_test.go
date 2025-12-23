@@ -161,6 +161,49 @@ func TestHandlerRouter_Route_TemperatureTarget(t *testing.T) {
 	assert.True(t, found, "Heat area 2 should have updated temperature")
 }
 
+func TestHandlerRouter_Route_HeatareaMode(t *testing.T) {
+	client := mock.NewMockClient()
+	store := store.NewInMemoryStore()
+	deviceID := "DEVICE-123"
+
+	router := NewHandlerRouter(map[string]transport.Client{}, store)
+
+	tests := []struct {
+		name         string
+		data         string
+		expectedMode int
+	}{
+		{"auto mode", "auto", 0},
+		{"day mode", "day", 1},
+		{"night mode", "night", 2},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			msg := &api.Message{
+				Room: 2,
+				Type: "heatarea_mode",
+				Data: tt.data,
+			}
+
+			err := router.route(client, deviceID, msg)
+			assert.NoError(t, err)
+
+			// Verify the message was sent
+			result, _ := client.Connect()
+			found := false
+			for _, heatArea := range result.Device.HeatAreas {
+				if heatArea.Nr == 2 {
+					assert.Equal(t, tt.expectedMode, heatArea.Mode)
+					found = true
+					break
+				}
+			}
+			assert.True(t, found, "Heat area 2 should have updated mode")
+		})
+	}
+}
+
 func TestHandlerRouter_Route_UnknownType(t *testing.T) {
 	client := mock.NewMockClient()
 	store := store.NewInMemoryStore()
