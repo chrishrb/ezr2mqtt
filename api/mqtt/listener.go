@@ -65,7 +65,7 @@ func (l *Listener) Connect(ctx context.Context, handler api.MessageHandler) (api
 
 	readyCh := make(chan struct{})
 
-	// e.g. ezr/id123/bedroom/set/temperature
+	// e.g. ezr/name123/bedroom/set/temperature
 	topic := fmt.Sprintf("%s/+/+/set/+", l.mqttPrefix)
 
 	conn := new(connection)
@@ -86,9 +86,9 @@ func (l *Listener) Connect(ctx context.Context, handler api.MessageHandler) (api
 			mqttRouter.RegisterHandler(topic, func(mqttMsg *paho.Publish) {
 				ctx := context.Background()
 
-				// determine id - ezr/id123/bedroom/set/temperature
+				// determine name - ezr/name123/bedroom/set/temperature
 				topicParts := strings.Split(mqttMsg.Topic, "/")
-				id := topicParts[len(topicParts)-4]
+				name := topicParts[len(topicParts)-4]
 
 				// unmarshal the message
 				var msg api.Message
@@ -99,7 +99,7 @@ func (l *Listener) Connect(ctx context.Context, handler api.MessageHandler) (api
 				}
 
 				// execute the handler
-				handler.Handle(ctx, id, &msg)
+				handler.Handle(ctx, name, &msg)
 			})
 			readyCh <- struct{}{}
 		},

@@ -37,8 +37,8 @@ func TestEmitterSendsMessage(t *testing.T) {
 	rcvdCh := make(chan struct{})
 
 	router := paho.NewStandardRouter()
-	router.RegisterHandler("ezr/id123/1/state/temperature", func(publish *paho.Publish) {
-		assert.Equal(t, "ezr/id123/1/state/temperature", publish.Topic)
+	router.RegisterHandler("ezr/name123/1/state/temperature", func(publish *paho.Publish) {
+		assert.Equal(t, "ezr/name123/1/state/temperature", publish.Topic)
 		var msg api.Message
 		err := json.Unmarshal(publish.Payload, &msg)
 		assert.NoError(t, err, "payload is not the expected message type")
@@ -57,7 +57,7 @@ func TestEmitterSendsMessage(t *testing.T) {
 		Type: "temperature",
 		Data: 22,
 	}
-	err = emitter.Emit(context.Background(), "id123", &msg)
+	err = emitter.Emit(context.Background(), "name123", &msg)
 	require.NoError(t, err)
 
 	// wait for success

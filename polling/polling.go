@@ -74,13 +74,12 @@ func (r *Poller) pollOnce(ctx context.Context) {
 	}
 
 	// Emit meta data
-	id := res.Device.ID
 	msg := &api.Message{
 		Room: 0, // for complete floor
 		Type: "meta",
 		Data: jsonData,
 	}
-	err = r.emitter.Emit(ctx, id, msg)
+	err = r.emitter.Emit(ctx, r.name, msg)
 	if err != nil {
 		slog.Error("error emitting meta data message", "error", err)
 	}
@@ -98,15 +97,13 @@ func (r *Poller) pollPeriodic(ctx context.Context) {
 				slog.Error("error sending periodic message to static endpoint", "error", err)
 			}
 
-			id := res.Device.ID
-
 			for _, h := range res.Device.HeatAreas {
 				msg := &api.Message{
 					Room: h.Nr,
 					Type: "temperature_target",
 					Data: h.TTarget,
 				}
-				err = r.emitter.Emit(ctx, id, msg)
+				err = r.emitter.Emit(ctx, r.name, msg)
 				if err != nil {
 					slog.Error("error emitting periodic temperature_target message", "error", err)
 				}
@@ -116,7 +113,7 @@ func (r *Poller) pollPeriodic(ctx context.Context) {
 					Type: "temperature_actual",
 					Data: h.TActual,
 				}
-				err = r.emitter.Emit(ctx, id, msg)
+				err = r.emitter.Emit(ctx, r.name, msg)
 				if err != nil {
 					slog.Error("error emitting periodic temperature_actual message", "error", err)
 				}

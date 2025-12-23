@@ -29,8 +29,8 @@ func TestListenerProcessesMessagesReceivedFromTheBroker(t *testing.T) {
 
 	// setup the handler
 	receivedMsgCh := make(chan struct{})
-	handler := func(ctx context.Context, id string, msg *api.Message) {
-		assert.Equal(t, "id123", id)
+	handler := func(ctx context.Context, name string, msg *api.Message) {
+		assert.Equal(t, "name123", name)
 		assert.Equal(t, 1, msg.Room)
 		assert.Equal(t, "temperature", msg.Type)
 		assert.Equal(t, 23.2, msg.Data)
@@ -75,7 +75,7 @@ func publishMessage(t *testing.T, broker *server.Server, msg api.Message) {
 			Qos:    0,
 			Retain: false,
 		},
-		TopicName: "ezr/id123/bedroom/set/temperature",
+		TopicName: "ezr/name123/bedroom/set/temperature",
 		Payload:   msgBytes,
 		PacketID:  uint16(0),
 	})
