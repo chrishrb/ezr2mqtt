@@ -47,7 +47,7 @@ func runOnce(ctx context.Context, client transport.Client, emitter api.Emitter) 
 	// Emit meta data
 	id := res.Device.ID
 	msg := &api.Message{
-		Room: "floor",
+		Room: 0, // for complete floor
 		Type: "meta",
 		Data: jsonData,
 	}
@@ -73,7 +73,7 @@ func run(ctx context.Context, client transport.Client, emitter api.Emitter, runE
 
 			for _, h := range res.Device.HeatAreas {
 				msg := &api.Message{
-					Room: h.Name,
+					Room: h.Nr,
 					Type: "temperature_target",
 					Data: h.TTarget,
 				}
@@ -83,7 +83,7 @@ func run(ctx context.Context, client transport.Client, emitter api.Emitter, runE
 				}
 
 				msg = &api.Message{
-					Room: h.Name,
+					Room: h.Nr,
 					Type: "temperature_actual",
 					Data: h.TActual,
 				}

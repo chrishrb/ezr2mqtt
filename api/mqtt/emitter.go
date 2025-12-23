@@ -30,7 +30,7 @@ func NewEmitter(opts ...Opt[Emitter]) *Emitter {
 
 func (e *Emitter) Emit(ctx context.Context, id string, message *api.Message) error {
 	// e.g. ezr/id123/bedroom/state/temperature
-	t := fmt.Sprintf("%s/%s/%s/state/%s", e.mqttPrefix, id, message.Room, message.Type)
+	t := fmt.Sprintf("%s/%s/%d/state/%s", e.mqttPrefix, id, message.Room, message.Type)
 	payload, err := json.Marshal(message)
 	if err != nil {
 		return fmt.Errorf("marshalling response of id %s: %v", id, err)

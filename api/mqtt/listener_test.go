@@ -31,7 +31,7 @@ func TestListenerProcessesMessagesReceivedFromTheBroker(t *testing.T) {
 	receivedMsgCh := make(chan struct{})
 	handler := func(ctx context.Context, id string, msg *api.Message) {
 		assert.Equal(t, "id123", id)
-		assert.Equal(t, "bedroom", msg.Room)
+		assert.Equal(t, 1, msg.Room)
 		assert.Equal(t, "temperature", msg.Type)
 		assert.Equal(t, 23.2, msg.Data)
 		receivedMsgCh <- struct{}{}
@@ -50,7 +50,7 @@ func TestListenerProcessesMessagesReceivedFromTheBroker(t *testing.T) {
 
 	// publish message
 	publishMessage(t, broker, api.Message{
-		Room: "bedroom",
+		Room: 1,
 		Type: "temperature",
 		Data: 23.2,
 	})

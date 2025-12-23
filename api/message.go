@@ -1,7 +1,7 @@
 package api
 
 type Message struct {
-	Room string
+	Room int
 	Type string
 	Data any
 }

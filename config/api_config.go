@@ -10,5 +10,6 @@ type MqttSettingsConfig struct {
 }
 
 type ApiSettingsConfig struct {
-	Mqtt *MqttSettingsConfig `mapstructure:"mqtt,omitempty" json:"mqtt,omitempty"`
+	Type string              `mapstructure:"type" toml:"type" validate:"required,oneof=mqtt"`
+	Mqtt *MqttSettingsConfig `mapstructure:"mqtt,omitempty" toml:"mqtt,omitempty" validate:"required_if=Type mqtt"`
 }

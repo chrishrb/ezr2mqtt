@@ -19,6 +19,20 @@ type BaseConfig struct {
 // DefaultConfig provides the default configuration. The configuration
 // read from the YAML file will overlay this configuration.
 var DefaultConfig = BaseConfig{
+	Api: ApiSettingsConfig{
+		Type: "mqtt",
+		Mqtt: &MqttSettingsConfig{
+			Urls:              []string{"tcp://mqtt:1883"},
+			Prefix:            "ezr",
+			Group:             "ezr2mqtt",
+			ConnectTimeout:    "10s",
+			ConnectRetryDelay: "1s",
+			KeepAliveInterval: "60s",
+		},
+	},
+	Ezr: EzrConfig{
+		Type: "mock",
+	},
 	General: GeneralConfig{
 		PollEvery: "1m",
 	},
