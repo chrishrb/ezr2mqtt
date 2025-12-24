@@ -16,10 +16,10 @@ func setTemperatureTarget(client transport.Client, id string, message *api.Messa
 
 	msg := transport.Message{
 		Device: transport.Device{
-			ID: id,
-			HeatAreas: []transport.HeatArea{{
-				Nr:      message.Room,
-				TTarget: ttarget,
+			ID: &id,
+			HeatAreas: &[]transport.HeatArea{{
+				Nr:      &message.Room,
+				TTarget: &ttarget,
 			}},
 		},
 	}

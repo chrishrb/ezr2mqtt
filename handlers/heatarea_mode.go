@@ -23,10 +23,10 @@ func setHeatareaMode(client transport.Client, id string, message *api.Message) e
 
 	msg := transport.Message{
 		Device: transport.Device{
-			ID: id,
-			HeatAreas: []transport.HeatArea{{
-				Nr:   message.Room,
-				Mode: mode,
+			ID: &id,
+			HeatAreas: &[]transport.HeatArea{{
+				Nr:   &message.Room,
+				Mode: &mode,
 			}},
 		},
 	}
@@ -35,6 +35,8 @@ func setHeatareaMode(client transport.Client, id string, message *api.Message) e
 	if err != nil {
 		return fmt.Errorf("error sending heatarea mode: %w", err)
 	}
+
+	// TODO: send mqtt message to confirm change
 
 	return nil
 }

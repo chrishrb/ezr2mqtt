@@ -10,6 +10,7 @@ type connectionDetails struct {
 	mqttUsername          string
 	mqttPassword          string
 	mqttPrefix            string
+	mqttHADiscoveryPrefix string
 	mqttConnectTimeout    time.Duration
 	mqttConnectRetryDelay time.Duration
 	mqttKeepAliveInterval uint16
@@ -46,6 +47,15 @@ func WithMqttPrefix[T Emitter | Listener](mqttPrefix string) Opt[T] {
 			x.mqttPrefix = mqttPrefix
 		case *Listener:
 			x.mqttPrefix = mqttPrefix
+		}
+	}
+}
+
+func WithMqttHADiscoveryPrefix[T Emitter](mqttHADiscoveryPrefix string) Opt[T] {
+	return func(h *T) {
+		switch x := any(h).(type) {
+		case *Emitter:
+			x.mqttHADiscoveryPrefix = mqttHADiscoveryPrefix
 		}
 	}
 }

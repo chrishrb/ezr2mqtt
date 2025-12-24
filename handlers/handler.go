@@ -11,14 +11,16 @@ import (
 )
 
 type HandlerRouter struct {
-	client map[string]transport.Client
-	store  store.Store
+	client  map[string]transport.Client
+	emitter api.Emitter
+	store   store.Store
 }
 
-func NewHandlerRouter(client map[string]transport.Client, store store.Store) *HandlerRouter {
+func NewHandlerRouter(client map[string]transport.Client, emitter api.Emitter, store store.Store) *HandlerRouter {
 	return &HandlerRouter{
-		client: client,
-		store:  store,
+		client:  client,
+		emitter: emitter,
+		store:   store,
 	}
 }
 

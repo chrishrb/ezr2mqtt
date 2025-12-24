@@ -2,9 +2,9 @@ package polling
 
 import (
 	"context"
-	"encoding/json"
 	"fmt"
 	"log/slog"
+	"strings"
 	"time"
 
 	"github.com/chrishrb/ezr2mqtt/api"
@@ -48,34 +48,67 @@ func (r *Poller) pollOnce(ctx context.Context) {
 	}
 
 	// Store device ID
-	r.store.SetID(r.name, res.Device.ID)
+	r.store.SetID(r.name, *res.Device.ID)
 
 	// Build json meta data
-	rooms := make([]api.RoomDiscovery, len(res.Device.HeatAreas))
-	for i, h := range res.Device.HeatAreas {
-		rooms[i] = api.RoomDiscovery{
-			ID:   h.Nr,
-			Name: h.Name,
+	if res.Device.HeatAreas != nil {
+		for _, h := range *res.Device.HeatAreas {
+			roomName := removeUmlauts(*h.Name)
+			roomNumber := *h.Nr
+
+			r.emitter.EmitHADiscovery(ctx, api.HAComponentNumber, api.HASensorDiscovery{
+				Name:     fmt.Sprintf("%s Temperature Target", roomName),
+				UniqueID: fmt.Sprintf("%s-%s-temperature_target", r.name, strings.ToLower(roomName)),
+				// TODO: refactor
+				StateTopic:        fmt.Sprintf("%s/%s/%d/state/temperature_target", "ezr", r.name, roomNumber),
+				UnitOfMeasurement: "°C",
+				DeviceClass:       "temperature",
+				StateClass:        "measurement",
+				// TODO: refactor
+				CommandTopic: fmt.Sprintf("%s/%s/%d/set/temperature_target", "ezr", r.name, roomNumber),
+				Minimum:      *h.TTargetMin,
+				Maximum:      *h.TTargetMax,
+				Step:         0.5,
+				Mode:         "slider",
+				Device: &api.HADevice{
+					Identifiers: []string{*res.Device.ID},
+					Name:        *res.Device.Name,
+				},
+			})
+
+			r.emitter.EmitHADiscovery(ctx, api.HAComponentSensor, api.HASensorDiscovery{
+				Name:     fmt.Sprintf("%s Temperature Actual", roomName),
+				UniqueID: fmt.Sprintf("%s-%s-temperature_actual", r.name, strings.ToLower(roomName)),
+				// TODO: refactor
+				StateTopic:        fmt.Sprintf("%s/%s/%d/state/temperature_actual", "ezr", r.name, roomNumber),
+				UnitOfMeasurement: "°C",
+				DeviceClass:       "temperature",
+				StateClass:        "measurement",
+				Device: &api.HADevice{
+					Identifiers: []string{*res.Device.ID},
+					Name:        *res.Device.Name,
+				},
+			})
+
+			r.emitter.EmitHADiscovery(ctx, api.HAComponentSelect, api.HASensorDiscovery{
+				Name:     fmt.Sprintf("%s Heatarea Mode", roomName),
+				UniqueID: fmt.Sprintf("%s-%s-heatarea_mode", r.name, strings.ToLower(roomName)),
+				// TODO: refactor
+				StateTopic: fmt.Sprintf("%s/%s/%d/state/heatarea_mode", "ezr", r.name, roomNumber),
+				// TODO: refactor
+				CommandTopic: fmt.Sprintf("%s/%s/%d/set/heatarea_mode", "ezr", r.name, roomNumber),
+				Options: []string{
+					"auto",
+					"day",
+					"night",
+				},
+				Device: &api.HADevice{
+					Identifiers: []string{*res.Device.ID},
+					Name:        *res.Device.Name,
+				},
+			})
 		}
 	}
-
-	metaData := api.ClimateDiscovery{
-		// Identity
-		Name: res.Device.Name,
-		ID:   res.Device.ID,
-		Type: res.Device.Type,
-
-		// Rooms
-		Rooms: rooms,
-	}
-
-	jsonData, err := json.Marshal(metaData)
-	if err != nil {
-		slog.Error("error marshalling meta data", "error", err)
-	}
-
-	// Emit meta data (0 for complete floor)
-	r.sendMsg(ctx, 0, "meta", string(jsonData))
 }
 
 func (r *Poller) pollPeriodic(ctx context.Context) {
@@ -88,17 +121,22 @@ func (r *Poller) pollPeriodic(ctx context.Context) {
 			res, err := r.client.Connect()
 			if err != nil {
 				slog.Error("error sending periodic message to static endpoint", "error", err)
+				continue
 			}
 
-			for _, h := range res.Device.HeatAreas {
-				r.sendMsg(ctx, h.Nr, "temperature_target", api.FormatFloat(h.TTarget))
-				r.sendMsg(ctx, h.Nr, "temperature_actual", api.FormatFloat(h.TActual))
+			if res.Device.HeatAreas != nil {
+				for _, h := range *res.Device.HeatAreas {
+					roomNumber := *h.Nr
 
-				mode, err := getHeatAreaMode(h.Mode)
-				if err == nil {
-					r.sendMsg(ctx, h.Nr, "heatarea_mode", mode)
-				} else {
-					slog.Error("error getting heat area mode", "error", err)
+					r.sendMsg(ctx, roomNumber, "temperature_target", api.FormatFloat(*h.TTarget))
+					r.sendMsg(ctx, roomNumber, "temperature_actual", api.FormatFloat(*h.TActual))
+
+					mode, err := getHeatAreaMode(*h.Mode)
+					if err == nil {
+						r.sendMsg(ctx, roomNumber, "heatarea_mode", mode)
+					} else {
+						slog.Error("error getting heat area mode", "error", err)
+					}
 				}
 			}
 		}
@@ -128,4 +166,14 @@ func getHeatAreaMode(mode int) (string, error) {
 	default:
 		return "", fmt.Errorf("unknown heat area mode: %d", mode)
 	}
+}
+func removeUmlauts(s string) string {
+	s = strings.ReplaceAll(s, "ä", "ae")
+	s = strings.ReplaceAll(s, "ö", "oe")
+	s = strings.ReplaceAll(s, "ü", "ue")
+	s = strings.ReplaceAll(s, "ß", "ss")
+	s = strings.ReplaceAll(s, "Ä", "Ae")
+	s = strings.ReplaceAll(s, "Ö", "Oe")
+	s = strings.ReplaceAll(s, "Ü", "Ue")
+	return s
 }

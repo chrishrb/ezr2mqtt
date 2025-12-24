@@ -2,6 +2,7 @@ package mqtt
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"net/url"
 	"sync"
@@ -46,6 +47,30 @@ func (e *Emitter) Emit(ctx context.Context, name string, message *api.Message) e
 	return nil
 }
 
+func (e *Emitter) EmitHADiscovery(ctx context.Context, component api.HAComponent, message api.HASensorDiscovery) error {
+	// e.g. homeassistant/<component>/<unique_id>/config
+	t := fmt.Sprintf("%s/%s/%s/config", e.mqttHADiscoveryPrefix, component, message.UniqueID)
+
+	err := e.ensureConnection(ctx)
+	if err != nil {
+		return fmt.Errorf("connecting to MQTT: %v", err)
+	}
+
+	msg, err := json.Marshal(message)
+	if err != nil {
+		return fmt.Errorf("marshalling HA discovery message: %v", err)
+	}
+
+	_, err = e.conn.Publish(ctx, &paho.Publish{
+		Topic:   t,
+		Payload: msg,
+	})
+	if err != nil {
+		return fmt.Errorf("publishing to %s: %v", t, err)
+	}
+	return nil
+}
+
 func ensureEmitterDefaults(e *Emitter) {
 	if e.mqttBrokerUrls == nil {
 		u, err := url.Parse("mqtt://127.0.0.1:1883/")
@@ -65,6 +90,9 @@ func ensureEmitterDefaults(e *Emitter) {
 	}
 	if e.mqttKeepAliveInterval == 0 {
 		e.mqttKeepAliveInterval = 10
+	}
+	if e.mqttHADiscoveryPrefix == "" {
+		e.mqttHADiscoveryPrefix = "homeassistant"
 	}
 }
 
