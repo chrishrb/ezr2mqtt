@@ -53,7 +53,7 @@ func Configure(ctx context.Context, cfg *BaseConfig) (c *Config, err error) {
 		return nil, err
 	}
 
-	c.MqttHandler = handlers.NewHandlerRouter(c.EzrClient, c.Store)
+	c.MqttHandler = handlers.NewHandlerRouter(c.EzrClient, c.MqttEmitter, c.Store)
 
 	c.PeriodicRequester, err = getPeriodicRequesters(c.EzrClient, c.MqttEmitter, c.Store, cfg)
 	if err != nil {

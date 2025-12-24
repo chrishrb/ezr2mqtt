@@ -43,6 +43,11 @@ func (s *HandlerRouter) Handle(ctx context.Context, name string, message *api.Me
 	if err != nil {
 		slog.Error("error handling message", "error", err, "device_name", name, "message_type", message.Type)
 	}
+
+	err = s.emitter.Emit(ctx, name, message)
+	if err != nil {
+		slog.Error("error emitting message", "type", message.Type, "error", err)
+	}
 }
 
 func (s *HandlerRouter) route(client transport.Client, id string, message *api.Message) error {
