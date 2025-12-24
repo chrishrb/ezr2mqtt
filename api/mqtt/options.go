@@ -7,6 +7,8 @@ import (
 
 type connectionDetails struct {
 	mqttBrokerUrls        []*url.URL
+	mqttUsername          string
+	mqttPassword          string
 	mqttPrefix            string
 	mqttConnectTimeout    time.Duration
 	mqttConnectRetryDelay time.Duration
@@ -59,6 +61,28 @@ func WithMqttConnectSettings[T Emitter | Listener](mqttConnectTimeout, mqttConne
 			x.mqttConnectTimeout = mqttConnectTimeout
 			x.mqttConnectRetryDelay = mqttConnectRetryDelay
 			x.mqttKeepAliveInterval = uint16(mqttKeepAliveInterval.Round(time.Second).Seconds())
+		}
+	}
+}
+
+func WithMqttUsername[T Emitter | Listener](mqttUsername string) Opt[T] {
+	return func(h *T) {
+		switch x := any(h).(type) {
+		case *Emitter:
+			x.mqttUsername = mqttUsername
+		case *Listener:
+			x.mqttUsername = mqttUsername
+		}
+	}
+}
+
+func WithMqttPassword[T Emitter | Listener](mqttPassword string) Opt[T] {
+	return func(h *T) {
+		switch x := any(h).(type) {
+		case *Emitter:
+			x.mqttPassword = mqttPassword
+		case *Listener:
+			x.mqttPassword = mqttPassword
 		}
 	}
 }

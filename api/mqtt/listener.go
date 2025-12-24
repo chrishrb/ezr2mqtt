@@ -71,7 +71,9 @@ func (l *Listener) Connect(ctx context.Context, handler api.MessageHandler) (api
 	conn := new(connection)
 	mqttRouter := paho.NewStandardRouter()
 	conn.mqttConn, err = autopaho.NewConnection(context.Background(), autopaho.ClientConfig{
-		BrokerUrls:        l.mqttBrokerUrls,
+		ServerUrls:        l.mqttBrokerUrls,
+		ConnectUsername:   l.mqttUsername,
+		ConnectPassword:   []byte(l.mqttPassword),
 		KeepAlive:         l.mqttKeepAliveInterval,
 		ConnectRetryDelay: l.mqttConnectRetryDelay,
 		OnConnectionUp: func(manager *autopaho.ConnectionManager, connack *paho.Connack) {

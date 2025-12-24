@@ -73,11 +73,13 @@ func (e *Emitter) ensureConnection(ctx context.Context) error {
 	defer e.Unlock()
 	if e.conn == nil {
 		conn, err := autopaho.NewConnection(context.Background(), autopaho.ClientConfig{
-			BrokerUrls:        e.mqttBrokerUrls,
+			ServerUrls:        e.mqttBrokerUrls,
+			ConnectUsername:   e.mqttUsername,
+			ConnectPassword:   []byte(e.mqttPassword),
 			KeepAlive:         e.mqttKeepAliveInterval,
 			ConnectRetryDelay: e.mqttConnectRetryDelay,
 			ClientConfig: paho.ClientConfig{
-				ClientID: fmt.Sprintf("%s-%s", "hoval-gw-emit", randSeq(5)),
+				ClientID: fmt.Sprintf("%s-%s", "ezr2mqtt-emit", randSeq(5)),
 			},
 		})
 		if err != nil {

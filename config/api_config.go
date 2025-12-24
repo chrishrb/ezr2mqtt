@@ -2,6 +2,8 @@ package config
 
 type MqttSettingsConfig struct {
 	Urls              []string `mapstructure:"urls" toml:"urls" validate:"required,dive,required"`
+	Username          *string  `mapstructure:"username" toml:"username"`
+	Password          *string  `mapstructure:"password" toml:"password"`
 	Prefix            string   `mapstructure:"prefix" toml:"prefix" validate:"required"`
 	Group             string   `mapstructure:"group" toml:"group" validate:"required"`
 	ConnectTimeout    string   `mapstructure:"connect_timeout" toml:"connect_timeout" validate:"required"`

@@ -108,6 +108,14 @@ func getMqttReceiver(cfg ApiSettingsConfig) (api.Listener, error) {
 			mqtt.WithMqttGroup(cfg.Mqtt.Group),
 		}
 
+		if cfg.Mqtt.Username != nil {
+			opts = append(opts, mqtt.WithMqttUsername[mqtt.Listener](*cfg.Mqtt.Username))
+		}
+
+		if cfg.Mqtt.Password != nil {
+			opts = append(opts, mqtt.WithMqttPassword[mqtt.Listener](*cfg.Mqtt.Password))
+		}
+
 		return mqtt.NewListener(opts...), nil
 	default:
 		return nil, fmt.Errorf("unsupported api type: %s", cfg.Type)
@@ -140,12 +148,21 @@ func getMqttEmitter(cfg ApiSettingsConfig) (api.Emitter, error) {
 			return nil, fmt.Errorf("failed to parse mqtt keep alive interval: %w", err)
 		}
 
-		mqttEmitter := mqtt.NewEmitter(
+		opts := []mqtt.Opt[mqtt.Emitter]{
 			mqtt.WithMqttBrokerUrls[mqtt.Emitter](mqttUrls),
 			mqtt.WithMqttPrefix[mqtt.Emitter](cfg.Mqtt.Prefix),
-			mqtt.WithMqttConnectSettings[mqtt.Emitter](mqttConnectTimeout, mqttConnectRetryDelay, mqttKeepAliveInterval))
+			mqtt.WithMqttConnectSettings[mqtt.Emitter](mqttConnectTimeout, mqttConnectRetryDelay, mqttKeepAliveInterval),
+		}
 
-		return mqttEmitter, nil
+		if cfg.Mqtt.Username != nil {
+			opts = append(opts, mqtt.WithMqttUsername[mqtt.Emitter](*cfg.Mqtt.Username))
+		}
+
+		if cfg.Mqtt.Password != nil {
+			opts = append(opts, mqtt.WithMqttPassword[mqtt.Emitter](*cfg.Mqtt.Password))
+		}
+
+		return mqtt.NewEmitter(opts...), nil
 	default:
 		return nil, fmt.Errorf("unsupported api type: %s", cfg.Type)
 	}
