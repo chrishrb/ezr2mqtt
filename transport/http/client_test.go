@@ -6,6 +6,7 @@ import (
 	"net/http/httptest"
 	"testing"
 
+	"github.com/chrishrb/ezr2mqtt/testutil"
 	"github.com/chrishrb/ezr2mqtt/transport"
 	"github.com/stretchr/testify/assert"
 )
@@ -24,12 +25,12 @@ func TestHTTPClient_Connect_Success(t *testing.T) {
 	mockMessage := &transport.Message{
 		XMLName: xml.Name{Local: "Devices"},
 		Device: transport.Device{
-			ID:   "TEST-123",
-			Type: "EZR",
-			Name: "Test Device",
-			HeatAreas: []transport.HeatArea{
-				{Nr: 1, Name: "Room 1", TTarget: 22.0, TActual: 21.5},
-				{Nr: 2, Name: "Room 2", TTarget: 20.0, TActual: 19.5},
+			ID:   testutil.Ptr("TEST-123"),
+			Type: testutil.Ptr("EZR"),
+			Name: testutil.Ptr("Test Device"),
+			HeatAreas: &[]transport.HeatArea{
+				{Nr: testutil.Ptr(1), Name: testutil.Ptr("Room 1"), TTarget: testutil.Ptr(22.0), TActual: testutil.Ptr(21.5)},
+				{Nr: testutil.Ptr(2), Name: testutil.Ptr("Room 2"), TTarget: testutil.Ptr(20.0), TActual: testutil.Ptr(19.5)},
 			},
 		},
 	}
@@ -55,10 +56,10 @@ func TestHTTPClient_Connect_Success(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, "TEST-123", result.Device.ID)
-	assert.Equal(t, "EZR", result.Device.Type)
-	assert.Equal(t, "Test Device", result.Device.Name)
-	assert.Len(t, result.Device.HeatAreas, 2)
+	assert.Equal(t, "TEST-123", *result.Device.ID)
+	assert.Equal(t, "EZR", *result.Device.Type)
+	assert.Equal(t, "Test Device", *result.Device.Name)
+	assert.Len(t, *result.Device.HeatAreas, 2)
 }
 
 func TestHTTPClient_Connect_InvalidXML(t *testing.T) {
@@ -123,9 +124,9 @@ func TestHTTPClient_Send_Success(t *testing.T) {
 
 	msg := &transport.Message{
 		Device: transport.Device{
-			ID: "TEST-123",
-			HeatAreas: []transport.HeatArea{
-				{Nr: 1, TTarget: 23.0},
+			ID: testutil.Ptr("TEST-123"),
+			HeatAreas: &[]transport.HeatArea{
+				{Nr: testutil.Ptr(1), TTarget: testutil.Ptr(23.0)},
 			},
 		},
 	}
@@ -158,10 +159,10 @@ func TestHTTPClient_Send_VerifyXMLStructure(t *testing.T) {
 
 	sentMsg := &transport.Message{
 		Device: transport.Device{
-			ID: "DEVICE-456",
-			HeatAreas: []transport.HeatArea{
-				{Nr: 2, TTarget: 24.5},
-				{Nr: 3, TTarget: 19.0},
+			ID: testutil.Ptr("DEVICE-456"),
+			HeatAreas: &[]transport.HeatArea{
+				{Nr: testutil.Ptr(2), TTarget: testutil.Ptr(24.5)},
+				{Nr: testutil.Ptr(3), TTarget: testutil.Ptr(19.0)},
 			},
 		},
 	}
@@ -170,12 +171,12 @@ func TestHTTPClient_Send_VerifyXMLStructure(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, receivedMessage)
-	assert.Equal(t, "DEVICE-456", receivedMessage.Device.ID)
-	assert.Len(t, receivedMessage.Device.HeatAreas, 2)
-	assert.Equal(t, 2, receivedMessage.Device.HeatAreas[0].Nr)
-	assert.Equal(t, 24.5, receivedMessage.Device.HeatAreas[0].TTarget)
-	assert.Equal(t, 3, receivedMessage.Device.HeatAreas[1].Nr)
-	assert.Equal(t, 19.0, receivedMessage.Device.HeatAreas[1].TTarget)
+	assert.Equal(t, "DEVICE-456", *receivedMessage.Device.ID)
+	assert.Len(t, *receivedMessage.Device.HeatAreas, 2)
+	assert.Equal(t, 2, *(*receivedMessage.Device.HeatAreas)[0].Nr)
+	assert.Equal(t, 24.5, *(*receivedMessage.Device.HeatAreas)[0].TTarget)
+	assert.Equal(t, 3, *(*receivedMessage.Device.HeatAreas)[1].Nr)
+	assert.Equal(t, 19.0, *(*receivedMessage.Device.HeatAreas)[1].TTarget)
 }
 
 func TestHTTPClient_Connect_InvalidHostname(t *testing.T) {
@@ -192,7 +193,7 @@ func TestHTTPClient_Send_InvalidHostname(t *testing.T) {
 
 	msg := &transport.Message{
 		Device: transport.Device{
-			ID: "TEST",
+			ID: testutil.Ptr("TEST"),
 		},
 	}
 
@@ -228,7 +229,7 @@ func TestHTTPClient_Send_ServerUnavailable(t *testing.T) {
 	client := NewHTTPClient(hostname)
 
 	msg := &transport.Message{
-		Device: transport.Device{ID: "TEST"},
+		Device: transport.Device{ID: testutil.Ptr("TEST")},
 	}
 
 	err := client.Send(msg)
@@ -241,24 +242,29 @@ func TestHTTPClient_Connect_ComplexDevice(t *testing.T) {
 	mockMessage := &transport.Message{
 		XMLName: xml.Name{Local: "Devices"},
 		Device: transport.Device{
-			ID:       "COMPLEX-123",
-			Type:     "EZR",
-			Name:     "Complex Device",
-			DateTime: "2025-12-23 10:00:00",
-			HeatAreas: []transport.HeatArea{
+			ID:       testutil.Ptr("COMPLEX-123"),
+			Type:     testutil.Ptr("EZR"),
+			Name:     testutil.Ptr("Complex Device"),
+			DateTime: testutil.Ptr("2025-12-23 10:00:00"),
+			HeatAreas: &[]transport.HeatArea{
 				{
-					Nr:         1,
-					Name:       "Living Room",
-					TTarget:    22.0,
-					TActual:    21.5,
-					TTargetMin: 15.0,
-					TTargetMax: 30.0,
-					Mode:       1,
-					State:      1,
+					Nr:         testutil.Ptr(1),
+					Name:       testutil.Ptr("Living Room"),
+					TTarget:    testutil.Ptr(22.0),
+					TActual:    testutil.Ptr(21.5),
+					TTargetMin: testutil.Ptr(15.0),
+					TTargetMax: testutil.Ptr(30.0),
+					Mode:       testutil.Ptr(1),
+					State:      testutil.Ptr(1),
 				},
 			},
-			HeatCtrls: []transport.HeatCtrl{
-				{Nr: 1, InUse: 1, HeatAreaNr: 1, Actor: 50},
+			HeatCtrls: &[]transport.HeatCtrl{
+				{
+					Nr:         testutil.Ptr(1),
+					InUse:      testutil.Ptr(1),
+					HeatAreaNr: testutil.Ptr(1),
+					Actor:      testutil.Ptr(50),
+				},
 			},
 		},
 	}
@@ -278,8 +284,8 @@ func TestHTTPClient_Connect_ComplexDevice(t *testing.T) {
 
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
-	assert.Equal(t, "COMPLEX-123", result.Device.ID)
-	assert.Len(t, result.Device.HeatAreas, 1)
-	assert.Equal(t, "Living Room", result.Device.HeatAreas[0].Name)
-	assert.Len(t, result.Device.HeatCtrls, 1)
+	assert.Equal(t, "COMPLEX-123", *result.Device.ID)
+	assert.Len(t, *result.Device.HeatAreas, 1)
+	assert.Equal(t, "Living Room", *(*result.Device.HeatAreas)[0].Name)
+	assert.Len(t, *result.Device.HeatCtrls, 1)
 }

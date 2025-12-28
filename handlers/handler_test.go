@@ -11,14 +11,23 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type mockEmitter struct {}
+func (m *mockEmitter) Emit(ctx context.Context, id string, message *api.Message) error {
+	return nil
+}
+func (m *mockEmitter) EmitHADiscovery(ctx context.Context, component api.HAComponent, message api.HASensorDiscovery) error {
+	return nil
+}
+
 func TestNewHandlerRouter(t *testing.T) {
 	client := mock.NewMockClient()
+	emitter := &mockEmitter{}
 	store := store.NewInMemoryStore()
 	clientMap := map[string]transport.Client{
 		"device1": client,
 	}
 
-	router := NewHandlerRouter(clientMap, store)
+	router := NewHandlerRouter(clientMap, emitter, store)
 
 	assert.NotNil(t, router)
 	assert.Equal(t, clientMap, router.client)
@@ -27,6 +36,7 @@ func TestNewHandlerRouter(t *testing.T) {
 
 func TestHandlerRouter_Handle_Success(t *testing.T) {
 	client := mock.NewMockClient()
+	emitter := &mockEmitter{}
 	store := store.NewInMemoryStore()
 	deviceName := "device1"
 	deviceID := "DEVICE-123"
@@ -38,7 +48,7 @@ func TestHandlerRouter_Handle_Success(t *testing.T) {
 		deviceName: client,
 	}
 
-	router := NewHandlerRouter(clientMap, store)
+	router := NewHandlerRouter(clientMap, emitter, store)
 
 	msg := &api.Message{
 		Room: 1,
@@ -53,12 +63,13 @@ func TestHandlerRouter_Handle_Success(t *testing.T) {
 	result, err := client.Connect()
 	assert.NoError(t, err)
 	assert.NotNil(t, result)
+	assert.NotNil(t, result.Device.HeatAreas)
 
 	// Verify the temperature was set correctly
 	found := false
-	for _, heatArea := range result.Device.HeatAreas {
-		if heatArea.Nr == 1 {
-			assert.Equal(t, 22.5, heatArea.TTarget)
+	for _, heatArea := range *result.Device.HeatAreas {
+		if *heatArea.Nr == 1 {
+			assert.Equal(t, 22.5, *heatArea.TTarget)
 			found = true
 			break
 		}
@@ -68,9 +79,10 @@ func TestHandlerRouter_Handle_Success(t *testing.T) {
 
 func TestHandlerRouter_Handle_NoClient(t *testing.T) {
 	store := store.NewInMemoryStore()
+	emitter := &mockEmitter{}
 	clientMap := map[string]transport.Client{}
 
-	router := NewHandlerRouter(clientMap, store)
+	router := NewHandlerRouter(clientMap, emitter, store)
 
 	msg := &api.Message{
 		Room: 1,
@@ -85,6 +97,7 @@ func TestHandlerRouter_Handle_NoClient(t *testing.T) {
 
 func TestHandlerRouter_Handle_NoStoreID(t *testing.T) {
 	client := mock.NewMockClient()
+	emitter := &mockEmitter{}
 	store := store.NewInMemoryStore()
 	deviceName := "device1"
 
@@ -93,7 +106,7 @@ func TestHandlerRouter_Handle_NoStoreID(t *testing.T) {
 		deviceName: client,
 	}
 
-	router := NewHandlerRouter(clientMap, store)
+	router := NewHandlerRouter(clientMap, emitter, store)
 
 	msg := &api.Message{
 		Room: 1,
@@ -108,6 +121,7 @@ func TestHandlerRouter_Handle_NoStoreID(t *testing.T) {
 
 func TestHandlerRouter_Handle_UnknownMessageType(t *testing.T) {
 	client := mock.NewMockClient()
+	emitter := &mockEmitter{}
 	store := store.NewInMemoryStore()
 	deviceName := "device1"
 	deviceID := "DEVICE-123"
@@ -119,7 +133,7 @@ func TestHandlerRouter_Handle_UnknownMessageType(t *testing.T) {
 		deviceName: client,
 	}
 
-	router := NewHandlerRouter(clientMap, store)
+	router := NewHandlerRouter(clientMap, emitter, store)
 
 	msg := &api.Message{
 		Room: 1,
@@ -134,10 +148,11 @@ func TestHandlerRouter_Handle_UnknownMessageType(t *testing.T) {
 
 func TestHandlerRouter_Route_TemperatureTarget(t *testing.T) {
 	client := mock.NewMockClient()
+	emitter := &mockEmitter{}
 	store := store.NewInMemoryStore()
 	deviceID := "DEVICE-123"
 
-	router := NewHandlerRouter(map[string]transport.Client{}, store)
+	router := NewHandlerRouter(map[string]transport.Client{}, emitter, store)
 
 	msg := &api.Message{
 		Room: 2,
@@ -150,10 +165,12 @@ func TestHandlerRouter_Route_TemperatureTarget(t *testing.T) {
 
 	// Verify the message was sent
 	result, _ := client.Connect()
+	assert.NotNil(t, result.Device.HeatAreas)
+
 	found := false
-	for _, heatArea := range result.Device.HeatAreas {
-		if heatArea.Nr == 2 {
-			assert.Equal(t, 23.0, heatArea.TTarget)
+	for _, heatArea := range *result.Device.HeatAreas {
+		if *heatArea.Nr == 2 {
+			assert.Equal(t, 23.0, *heatArea.TTarget)
 			found = true
 			break
 		}
@@ -163,10 +180,11 @@ func TestHandlerRouter_Route_TemperatureTarget(t *testing.T) {
 
 func TestHandlerRouter_Route_HeatareaMode(t *testing.T) {
 	client := mock.NewMockClient()
+	emitter := &mockEmitter{}
 	store := store.NewInMemoryStore()
 	deviceID := "DEVICE-123"
 
-	router := NewHandlerRouter(map[string]transport.Client{}, store)
+	router := NewHandlerRouter(map[string]transport.Client{}, emitter, store)
 
 	tests := []struct {
 		name         string
@@ -191,10 +209,11 @@ func TestHandlerRouter_Route_HeatareaMode(t *testing.T) {
 
 			// Verify the message was sent
 			result, _ := client.Connect()
+			assert.NotNil(t, result.Device.HeatAreas)
 			found := false
-			for _, heatArea := range result.Device.HeatAreas {
-				if heatArea.Nr == 2 {
-					assert.Equal(t, tt.expectedMode, heatArea.Mode)
+			for _, heatArea := range *result.Device.HeatAreas {
+				if *heatArea.Nr == 2 {
+					assert.Equal(t, tt.expectedMode, *heatArea.Mode)
 					found = true
 					break
 				}
@@ -206,10 +225,11 @@ func TestHandlerRouter_Route_HeatareaMode(t *testing.T) {
 
 func TestHandlerRouter_Route_UnknownType(t *testing.T) {
 	client := mock.NewMockClient()
+	emitter := &mockEmitter{}
 	store := store.NewInMemoryStore()
 	deviceID := "DEVICE-123"
 
-	router := NewHandlerRouter(map[string]transport.Client{}, store)
+	router := NewHandlerRouter(map[string]transport.Client{}, emitter, store)
 
 	msg := &api.Message{
 		Room: 1,

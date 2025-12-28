@@ -47,7 +47,11 @@ func (e *Emitter) Emit(ctx context.Context, name string, message *api.Message) e
 	return nil
 }
 
-func (e *Emitter) EmitHADiscovery(ctx context.Context, component api.HAComponent, message api.HASensorDiscovery) error {
+func (e *Emitter) EmitHADiscovery(ctx context.Context, component api.HAComponent, message *api.HASensorDiscovery) error {
+	if message.UniqueID == "" {
+		return fmt.Errorf("HA discovery message missing unique ID")
+	}
+
 	// e.g. homeassistant/<component>/<unique_id>/config
 	t := fmt.Sprintf("%s/%s/%s/config", e.mqttHADiscoveryPrefix, component, message.UniqueID)
 
