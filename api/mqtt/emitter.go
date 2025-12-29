@@ -47,7 +47,7 @@ func (e *Emitter) Emit(ctx context.Context, name string, message *api.Message) e
 	return nil
 }
 
-func (e *Emitter) EmitHADiscovery(ctx context.Context, component api.HAComponent, message *api.HASensorDiscovery) error {
+func (e *Emitter) EmitHADiscovery(ctx context.Context, component api.HAComponent, message *api.HADiscovery) error {
 	if message.UniqueID == "" {
 		return fmt.Errorf("HA discovery message missing unique ID")
 	}

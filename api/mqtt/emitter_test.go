@@ -93,7 +93,7 @@ func TestEmitterSendsHADiscovery(t *testing.T) {
 		assert.Equal(t, "homeassistant/number/id123/config", publish.Topic)
 		assert.NoError(t, err, "payload is not the expected message type")
 
-		var publishMsg api.HASensorDiscovery
+		var publishMsg api.HADiscovery
 		err = json.Unmarshal(publish.Payload, &publishMsg)
 		assert.NoError(t, err, "payload is not the expected message type")
 
@@ -108,9 +108,9 @@ func TestEmitterSendsHADiscovery(t *testing.T) {
 	}()
 
 	// publish a message to the input channel
-	msg := api.HASensorDiscovery{
+	msg := api.HADiscovery{
 		UniqueID: "id123",
-		Name: "test123",
+		Name:     "test123",
 	}
 	err = emitter.EmitHADiscovery(context.Background(), api.HAComponentNumber, &msg)
 	require.NoError(t, err)

@@ -56,7 +56,7 @@ func (r *Poller) pollOnce(ctx context.Context) {
 			roomName := removeUmlauts(*h.Name)
 			roomNumber := *h.Nr
 
-			r.emitter.EmitHADiscovery(ctx, api.HAComponentNumber, &api.HASensorDiscovery{
+			r.emitter.EmitHADiscovery(ctx, api.HAComponentNumber, &api.HADiscovery{
 				Name:     fmt.Sprintf("%s Temperature Target", roomName),
 				UniqueID: fmt.Sprintf("%s-%s-temperature_target", r.name, strings.ToLower(roomName)),
 				// TODO: refactor
@@ -76,7 +76,7 @@ func (r *Poller) pollOnce(ctx context.Context) {
 				},
 			})
 
-			r.emitter.EmitHADiscovery(ctx, api.HAComponentSensor, &api.HASensorDiscovery{
+			r.emitter.EmitHADiscovery(ctx, api.HAComponentSensor, &api.HADiscovery{
 				Name:     fmt.Sprintf("%s Temperature Actual", roomName),
 				UniqueID: fmt.Sprintf("%s-%s-temperature_actual", r.name, strings.ToLower(roomName)),
 				// TODO: refactor
@@ -90,7 +90,7 @@ func (r *Poller) pollOnce(ctx context.Context) {
 				},
 			})
 
-			r.emitter.EmitHADiscovery(ctx, api.HAComponentSelect, &api.HASensorDiscovery{
+			r.emitter.EmitHADiscovery(ctx, api.HAComponentSelect, &api.HADiscovery{
 				Name:     fmt.Sprintf("%s Heatarea Mode", roomName),
 				UniqueID: fmt.Sprintf("%s-%s-heatarea_mode", r.name, strings.ToLower(roomName)),
 				// TODO: refactor

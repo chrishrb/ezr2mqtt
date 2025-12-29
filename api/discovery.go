@@ -8,7 +8,7 @@ var (
 	HAComponentSelect HAComponent = "select"
 )
 
-type HASensorDiscovery struct {
+type HADiscovery struct {
 	Name                string    `json:"name,omitempty"`
 	UniqueID            string    `json:"unique_id,omitempty"`
 	StateTopic          string    `json:"state_topic"`

@@ -2,7 +2,6 @@ package polling
 
 import (
 	"context"
-	"encoding/json"
 	"testing"
 	"time"
 
@@ -12,13 +11,28 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
+type mockEmitter struct {
+	emittedMessages      []*api.Message
+	emittedIDs           []string
+	emittedHADiscoveries []*api.HADiscovery
+	emittedHAComponents  []api.HAComponent
+}
+
+func (m *mockEmitter) Emit(ctx context.Context, id string, message *api.Message) error {
+	m.emittedIDs = append(m.emittedIDs, id)
+	m.emittedMessages = append(m.emittedMessages, message)
+	return nil
+}
+
+func (m *mockEmitter) EmitHADiscovery(ctx context.Context, component api.HAComponent, message *api.HADiscovery) error {
+	m.emittedHAComponents = append(m.emittedHAComponents, component)
+	m.emittedHADiscoveries = append(m.emittedHADiscoveries, message)
+	return nil
+}
+
 func TestNewPoller(t *testing.T) {
 	client := mock.NewMockClient()
-	emitterCalled := false
-	emitter := api.EmitterFunc(func(ctx context.Context, id string, message *api.Message) error {
-		emitterCalled = true
-		return nil
-	})
+	emitter := &mockEmitter{}
 	store := store.NewInMemoryStore()
 	runEvery := 5 * time.Second
 
@@ -29,7 +43,7 @@ func TestNewPoller(t *testing.T) {
 	assert.Equal(t, client, poller.client)
 	assert.Equal(t, runEvery, poller.runEvery)
 	assert.Equal(t, store, poller.store)
-	assert.False(t, emitterCalled) // Should not be called during construction
+	assert.Len(t, emitter.emittedMessages, 0) // Should not be called during construction
 }
 
 func TestPoller_PollOnce_Success(t *testing.T) {
@@ -37,14 +51,7 @@ func TestPoller_PollOnce_Success(t *testing.T) {
 	store := store.NewInMemoryStore()
 	deviceName := "test-device"
 
-	var emittedMessages []*api.Message
-	var emittedIDs []string
-
-	emitter := api.EmitterFunc(func(ctx context.Context, id string, message *api.Message) error {
-		emittedIDs = append(emittedIDs, id)
-		emittedMessages = append(emittedMessages, message)
-		return nil
-	})
+	emitter := &mockEmitter{}
 
 	poller := NewPoller(deviceName, client, emitter, 1*time.Hour, store)
 
@@ -59,26 +66,10 @@ func TestPoller_PollOnce_Success(t *testing.T) {
 	assert.NotNil(t, id)
 	assert.Equal(t, "MOCK-12345", *id)
 
-	// Verify meta message was emitted
-	assert.Len(t, emittedMessages, 1)
-	assert.Equal(t, deviceName, emittedIDs[0])
-	assert.Equal(t, "meta", emittedMessages[0].Type)
-	assert.Equal(t, 0, emittedMessages[0].Room)
-
-	// Verify meta data structure
-	var metaData api.ClimateDiscovery
-	err := json.Unmarshal([]byte(emittedMessages[0].Data), &metaData)
-	assert.NoError(t, err)
-	assert.Equal(t, "Mock Device", metaData.Name)
-	assert.Equal(t, "MOCK-12345", metaData.ID)
-	assert.Equal(t, "EZR", metaData.Type)
-	assert.Len(t, metaData.Rooms, 2)
-
-	// Verify room data
-	assert.Equal(t, 1, metaData.Rooms[0].ID)
-	assert.Equal(t, "Living Room", metaData.Rooms[0].Name)
-	assert.Equal(t, 2, metaData.Rooms[1].ID)
-	assert.Equal(t, "Bedroom", metaData.Rooms[1].Name)
+	// Verify HA discovery messages were emitted (not regular messages)
+	// Mock client has 2 heat areas, each emits 3 HA discovery messages
+	assert.Len(t, emitter.emittedHADiscoveries, 6)
+	assert.Len(t, emitter.emittedMessages, 0) // pollOnce doesn't emit regular messages
 }
 
 func TestPoller_PollPeriodic_EmitsMessages(t *testing.T) {
@@ -86,14 +77,7 @@ func TestPoller_PollPeriodic_EmitsMessages(t *testing.T) {
 	store := store.NewInMemoryStore()
 	deviceName := "test-device"
 
-	var emittedMessages []*api.Message
-	var emittedIDs []string
-
-	emitter := api.EmitterFunc(func(ctx context.Context, id string, message *api.Message) error {
-		emittedIDs = append(emittedIDs, id)
-		emittedMessages = append(emittedMessages, message)
-		return nil
-	})
+	emitter := &mockEmitter{}
 
 	// Use a very short polling interval for testing
 	poller := NewPoller(deviceName, client, emitter, 50*time.Millisecond, store)
@@ -106,15 +90,15 @@ func TestPoller_PollPeriodic_EmitsMessages(t *testing.T) {
 	// Should have emitted messages for at least one poll cycle
 	// Each cycle emits 2 messages per heat area (target and actual)
 	// Mock client has 2 heat areas, so 4 messages per cycle
-	assert.GreaterOrEqual(t, len(emittedMessages), 4)
+	assert.GreaterOrEqual(t, len(emitter.emittedMessages), 4)
 
 	// Verify message types and structure
 	targetFound := false
 	actualFound := false
 	heatareaModeFound := false
 
-	for i, msg := range emittedMessages {
-		assert.Equal(t, deviceName, emittedIDs[i])
+	for i, msg := range emitter.emittedMessages {
+		assert.Equal(t, deviceName, emitter.emittedIDs[i])
 		assert.Contains(t, []string{"temperature_target", "temperature_actual", "heatarea_mode"}, msg.Type)
 
 		if msg.Type == "temperature_target" {
@@ -140,9 +124,7 @@ func TestPoller_PollPeriodic_ContextCancellation(t *testing.T) {
 	client := mock.NewMockClient()
 	store := store.NewInMemoryStore()
 
-	emitter := api.EmitterFunc(func(ctx context.Context, id string, message *api.Message) error {
-		return nil
-	})
+	emitter := &mockEmitter{}
 
 	poller := NewPoller("device1", client, emitter, 100*time.Millisecond, store)
 
@@ -172,12 +154,7 @@ func TestPoller_Run_StartsPolling(t *testing.T) {
 	client := mock.NewMockClient()
 	store := store.NewInMemoryStore()
 
-	var emittedMessages []*api.Message
-
-	emitter := api.EmitterFunc(func(ctx context.Context, id string, message *api.Message) error {
-		emittedMessages = append(emittedMessages, message)
-		return nil
-	})
+	emitter := &mockEmitter{}
 
 	poller := NewPoller("device1", client, emitter, 50*time.Millisecond, store)
 
@@ -189,12 +166,10 @@ func TestPoller_Run_StartsPolling(t *testing.T) {
 	// Wait for polling to occur
 	time.Sleep(250 * time.Millisecond)
 
-	// Should have emitted at least the meta message from pollOnce
-	// and some periodic messages
-	assert.Greater(t, len(emittedMessages), 0)
-
-	// First message should be meta
-	assert.Equal(t, "meta", emittedMessages[0].Type)
+	// Should have emitted HA discovery messages from pollOnce
+	// and some periodic temperature/mode messages
+	assert.Greater(t, len(emitter.emittedMessages), 0, "Should have periodic messages")
+	assert.Greater(t, len(emitter.emittedHADiscoveries), 0, "Should have HA discovery messages from pollOnce")
 }
 
 func TestPoller_PollOnce_StoresCorrectDeviceID(t *testing.T) {
@@ -202,9 +177,7 @@ func TestPoller_PollOnce_StoresCorrectDeviceID(t *testing.T) {
 	store := store.NewInMemoryStore()
 	deviceName := "my-device"
 
-	emitter := api.EmitterFunc(func(ctx context.Context, id string, message *api.Message) error {
-		return nil
-	})
+	emitter := &mockEmitter{}
 
 	poller := NewPoller(deviceName, client, emitter, 1*time.Hour, store)
 
@@ -223,12 +196,7 @@ func TestPoller_PollPeriodic_EmitsCorrectData(t *testing.T) {
 	client := mock.NewMockClient()
 	store := store.NewInMemoryStore()
 
-	var emittedMessages []*api.Message
-
-	emitter := api.EmitterFunc(func(ctx context.Context, id string, message *api.Message) error {
-		emittedMessages = append(emittedMessages, message)
-		return nil
-	})
+	emitter := &mockEmitter{}
 
 	poller := NewPoller("device1", client, emitter, 50*time.Millisecond, store)
 
@@ -243,7 +211,7 @@ func TestPoller_PollPeriodic_EmitsCorrectData(t *testing.T) {
 	room2Target := false
 	room2Actual := false
 
-	for _, msg := range emittedMessages {
+	for _, msg := range emitter.emittedMessages {
 		if msg.Room == 1 && msg.Type == "temperature_target" {
 			room1Target = true
 			assert.Equal(t, "22.00", msg.Data)
@@ -266,4 +234,88 @@ func TestPoller_PollPeriodic_EmitsCorrectData(t *testing.T) {
 	assert.True(t, room1Actual, "Should emit room 1 actual temperature")
 	assert.True(t, room2Target, "Should emit room 2 target temperature")
 	assert.True(t, room2Actual, "Should emit room 2 actual temperature")
+}
+
+func TestPoller_PollOnce_EmitsHADiscovery(t *testing.T) {
+	client := mock.NewMockClient()
+	store := store.NewInMemoryStore()
+	deviceName := "test-device"
+
+	emitter := &mockEmitter{}
+
+	poller := NewPoller(deviceName, client, emitter, 1*time.Hour, store)
+
+	ctx := context.Background()
+	poller.pollOnce(ctx)
+
+	// Give it a moment to complete
+	time.Sleep(100 * time.Millisecond)
+
+	// Mock client has 2 heat areas, each should emit 3 HA discovery messages
+	// (temperature_target as number, temperature_actual as sensor, heatarea_mode as select)
+	assert.Len(t, emitter.emittedHADiscoveries, 6)
+	assert.Len(t, emitter.emittedHAComponents, 6)
+
+	// Verify the component types are correct
+	componentCounts := map[api.HAComponent]int{}
+	for _, component := range emitter.emittedHAComponents {
+		componentCounts[component]++
+	}
+	assert.Equal(t, 2, componentCounts[api.HAComponentNumber], "Should have 2 number components (target temp for each room)")
+	assert.Equal(t, 2, componentCounts[api.HAComponentSensor], "Should have 2 sensor components (actual temp for each room)")
+	assert.Equal(t, 2, componentCounts[api.HAComponentSelect], "Should have 2 select components (mode for each room)")
+
+	// Verify discovery message content for temperature target (number component)
+	var targetDiscovery *api.HADiscovery
+	for i, component := range emitter.emittedHAComponents {
+		if component == api.HAComponentNumber {
+			targetDiscovery = emitter.emittedHADiscoveries[i]
+			break
+		}
+	}
+	assert.NotNil(t, targetDiscovery)
+	assert.Contains(t, targetDiscovery.Name, "Temperature Target")
+	assert.Contains(t, targetDiscovery.UniqueID, "test-device")
+	assert.Contains(t, targetDiscovery.UniqueID, "temperature_target")
+	assert.Contains(t, targetDiscovery.StateTopic, "ezr/test-device")
+	assert.Contains(t, targetDiscovery.StateTopic, "state/temperature_target")
+	assert.Equal(t, "°C", targetDiscovery.UnitOfMeasurement)
+	assert.Equal(t, "temperature", targetDiscovery.DeviceClass)
+	assert.Equal(t, "measurement", targetDiscovery.StateClass)
+	assert.Contains(t, targetDiscovery.CommandTopic, "set/temperature_target")
+	assert.Equal(t, "slider", targetDiscovery.Mode)
+	assert.NotNil(t, targetDiscovery.Device)
+	assert.Equal(t, "MOCK-12345", targetDiscovery.Device.Identifiers[0])
+	assert.Equal(t, "Mock Device", targetDiscovery.Device.Name)
+
+	// Verify discovery message content for temperature actual (sensor component)
+	var actualDiscovery *api.HADiscovery
+	for i, component := range emitter.emittedHAComponents {
+		if component == api.HAComponentSensor {
+			actualDiscovery = emitter.emittedHADiscoveries[i]
+			break
+		}
+	}
+	assert.NotNil(t, actualDiscovery)
+	assert.Contains(t, actualDiscovery.Name, "Temperature Actual")
+	assert.Contains(t, actualDiscovery.UniqueID, "temperature_actual")
+	assert.Contains(t, actualDiscovery.StateTopic, "state/temperature_actual")
+	assert.Equal(t, "°C", actualDiscovery.UnitOfMeasurement)
+	assert.Equal(t, "temperature", actualDiscovery.DeviceClass)
+	assert.Equal(t, "measurement", actualDiscovery.StateClass)
+
+	// Verify discovery message content for heatarea mode (select component)
+	var modeDiscovery *api.HADiscovery
+	for i, component := range emitter.emittedHAComponents {
+		if component == api.HAComponentSelect {
+			modeDiscovery = emitter.emittedHADiscoveries[i]
+			break
+		}
+	}
+	assert.NotNil(t, modeDiscovery)
+	assert.Contains(t, modeDiscovery.Name, "Heatarea Mode")
+	assert.Contains(t, modeDiscovery.UniqueID, "heatarea_mode")
+	assert.Contains(t, modeDiscovery.StateTopic, "state/heatarea_mode")
+	assert.Contains(t, modeDiscovery.CommandTopic, "set/heatarea_mode")
+	assert.Equal(t, []string{"auto", "day", "night"}, modeDiscovery.Options)
 }

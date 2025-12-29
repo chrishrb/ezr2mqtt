@@ -11,11 +11,18 @@ import (
 	"github.com/stretchr/testify/assert"
 )
 
-type mockEmitter struct {}
+type mockEmitter struct {
+	EmitWasCalled            bool
+	EmitHADiscoveryWasCalled bool
+}
+
 func (m *mockEmitter) Emit(ctx context.Context, id string, message *api.Message) error {
+	m.EmitWasCalled = true
 	return nil
 }
-func (m *mockEmitter) EmitHADiscovery(ctx context.Context, component api.HAComponent, message api.HASensorDiscovery) error {
+
+func (m *mockEmitter) EmitHADiscovery(ctx context.Context, component api.HAComponent, message *api.HADiscovery) error {
+	m.EmitHADiscoveryWasCalled = true
 	return nil
 }
 
@@ -53,7 +60,7 @@ func TestHandlerRouter_Handle_Success(t *testing.T) {
 	msg := &api.Message{
 		Room: 1,
 		Type: "temperature_target",
-		Data: "22.5",
+		Data: "21.5",
 	}
 
 	ctx := context.Background()
@@ -69,7 +76,7 @@ func TestHandlerRouter_Handle_Success(t *testing.T) {
 	found := false
 	for _, heatArea := range *result.Device.HeatAreas {
 		if *heatArea.Nr == 1 {
-			assert.Equal(t, 22.5, *heatArea.TTarget)
+			assert.Equal(t, 21.5, *heatArea.TTarget)
 			found = true
 			break
 		}
