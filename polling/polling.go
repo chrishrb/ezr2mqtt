@@ -56,31 +56,31 @@ func (r *Poller) pollOnce(ctx context.Context) {
 			roomName := removeUmlauts(*h.Name)
 			roomNumber := *h.Nr
 
-			r.emitter.EmitHADiscovery(ctx, api.HAComponentNumber, &api.HADiscovery{
-				Name:     fmt.Sprintf("%s Temperature Target", roomName),
-				UniqueID: fmt.Sprintf("%s-%s-temperature_target", r.name, strings.ToLower(roomName)),
-				// TODO: refactor
-				StateTopic:        fmt.Sprintf("%s/%s/%d/state/temperature_target", "ezr", r.name, roomNumber),
+			err = r.emitter.EmitHADiscovery(ctx, api.HAComponentNumber, &api.HADiscovery{
+				Name:              fmt.Sprintf("%s Temperature Target", roomName),
+				UniqueID:          fmt.Sprintf("%s-%s-temperature_target", r.name, strings.ToLower(roomName)),
+				StateTopic:        fmt.Sprintf("%s/%s/%d/state/temperature_target", r.emitter.GetPrefix(), r.name, roomNumber),
 				UnitOfMeasurement: "°C",
 				DeviceClass:       "temperature",
 				StateClass:        "measurement",
-				// TODO: refactor
-				CommandTopic: fmt.Sprintf("%s/%s/%d/set/temperature_target", "ezr", r.name, roomNumber),
-				Minimum:      *h.TTargetMin,
-				Maximum:      *h.TTargetMax,
-				Step:         0.5,
-				Mode:         "slider",
+				CommandTopic:      fmt.Sprintf("%s/%s/%d/set/temperature_target", r.emitter.GetPrefix(), r.name, roomNumber),
+				Minimum:           *h.TTargetMin,
+				Maximum:           *h.TTargetMax,
+				Step:              0.5,
+				Mode:              "slider",
 				Device: &api.HADevice{
 					Identifiers: []string{*res.Device.ID},
 					Name:        *res.Device.Name,
 				},
 			})
+			if err != nil {
+				slog.Error("error emitting HA discovery for temperature target", "error", err)
+			}
 
-			r.emitter.EmitHADiscovery(ctx, api.HAComponentSensor, &api.HADiscovery{
-				Name:     fmt.Sprintf("%s Temperature Actual", roomName),
-				UniqueID: fmt.Sprintf("%s-%s-temperature_actual", r.name, strings.ToLower(roomName)),
-				// TODO: refactor
-				StateTopic:        fmt.Sprintf("%s/%s/%d/state/temperature_actual", "ezr", r.name, roomNumber),
+			err = r.emitter.EmitHADiscovery(ctx, api.HAComponentSensor, &api.HADiscovery{
+				Name:              fmt.Sprintf("%s Temperature Actual", roomName),
+				UniqueID:          fmt.Sprintf("%s-%s-temperature_actual", r.name, strings.ToLower(roomName)),
+				StateTopic:        fmt.Sprintf("%s/%s/%d/state/temperature_actual", r.emitter.GetPrefix(), r.name, roomNumber),
 				UnitOfMeasurement: "°C",
 				DeviceClass:       "temperature",
 				StateClass:        "measurement",
@@ -89,14 +89,15 @@ func (r *Poller) pollOnce(ctx context.Context) {
 					Name:        *res.Device.Name,
 				},
 			})
+			if err != nil {
+				slog.Error("error emitting HA discovery for temperature actual", "error", err)
+			}
 
-			r.emitter.EmitHADiscovery(ctx, api.HAComponentSelect, &api.HADiscovery{
-				Name:     fmt.Sprintf("%s Heatarea Mode", roomName),
-				UniqueID: fmt.Sprintf("%s-%s-heatarea_mode", r.name, strings.ToLower(roomName)),
-				// TODO: refactor
-				StateTopic: fmt.Sprintf("%s/%s/%d/state/heatarea_mode", "ezr", r.name, roomNumber),
-				// TODO: refactor
-				CommandTopic: fmt.Sprintf("%s/%s/%d/set/heatarea_mode", "ezr", r.name, roomNumber),
+			err = r.emitter.EmitHADiscovery(ctx, api.HAComponentSelect, &api.HADiscovery{
+				Name:         fmt.Sprintf("%s Heatarea Mode", roomName),
+				UniqueID:     fmt.Sprintf("%s-%s-heatarea_mode", r.name, strings.ToLower(roomName)),
+				StateTopic:   fmt.Sprintf("%s/%s/%d/state/heatarea_mode", r.emitter.GetPrefix(), r.name, roomNumber),
+				CommandTopic: fmt.Sprintf("%s/%s/%d/set/heatarea_mode", r.emitter.GetPrefix(), r.name, roomNumber),
 				Options: []string{
 					"auto",
 					"day",
@@ -107,6 +108,9 @@ func (r *Poller) pollOnce(ctx context.Context) {
 					Name:        *res.Device.Name,
 				},
 			})
+			if err != nil {
+				slog.Error("error emitting HA discovery for heatarea mode", "error", err)
+			}
 		}
 	}
 }

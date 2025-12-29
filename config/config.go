@@ -121,6 +121,7 @@ func getMqttReceiver(cfg ApiSettingsConfig) (api.Listener, error) {
 		return nil, fmt.Errorf("unsupported api type: %s", cfg.Type)
 	}
 }
+
 func getMqttEmitter(cfg ApiSettingsConfig) (api.Emitter, error) {
 	switch cfg.Type {
 	case "mqtt":

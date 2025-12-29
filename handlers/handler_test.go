@@ -26,6 +26,10 @@ func (m *mockEmitter) EmitHADiscovery(ctx context.Context, component api.HACompo
 	return nil
 }
 
+func (m *mockEmitter) GetPrefix() string {
+	return "ezr"
+}
+
 func TestNewHandlerRouter(t *testing.T) {
 	client := mock.NewMockClient()
 	emitter := &mockEmitter{}

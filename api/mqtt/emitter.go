@@ -75,6 +75,10 @@ func (e *Emitter) EmitHADiscovery(ctx context.Context, component api.HAComponent
 	return nil
 }
 
+func (e *Emitter) GetPrefix() string {
+	return e.mqttPrefix
+}
+
 func ensureEmitterDefaults(e *Emitter) {
 	if e.mqttBrokerUrls == nil {
 		u, err := url.Parse("mqtt://127.0.0.1:1883/")
