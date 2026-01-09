@@ -10,11 +10,20 @@ import (
 )
 
 type Poller struct {
-	name     string
-	client   transport.Client
-	emitter  api.Emitter
-	runEvery time.Duration
-	store    store.Store
+	name              string
+	client            transport.Client
+	emitter           api.Emitter
+	runEvery          time.Duration
+	discoveryRunEvery time.Duration
+	store             store.Store
+}
+
+type PollerOption func(*Poller)
+
+func WithDiscoveryInterval(interval time.Duration) PollerOption {
+	return func(p *Poller) {
+		p.discoveryRunEvery = interval
+	}
 }
 
 func NewPoller(
@@ -23,17 +32,25 @@ func NewPoller(
 	emitter api.Emitter,
 	runEvery time.Duration,
 	store store.Store,
+	opts ...PollerOption,
 ) *Poller {
-	return &Poller{
-		name:     name,
-		client:   client,
-		emitter:  emitter,
-		runEvery: runEvery,
-		store:    store,
+	p := &Poller{
+		name:              name,
+		client:            client,
+		emitter:           emitter,
+		runEvery:          runEvery,
+		discoveryRunEvery: 10 * time.Minute,
+		store:             store,
 	}
+
+	for _, opt := range opts {
+		opt(p)
+	}
+
+	return p
 }
 
 func (r *Poller) Run(ctx context.Context) {
-	go r.pollOnce(ctx)
+	go r.runDiscovery(ctx)
 	go r.pollPeriodic(ctx)
 }

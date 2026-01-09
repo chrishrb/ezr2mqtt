@@ -5,29 +5,38 @@ import (
 	"fmt"
 	"log/slog"
 	"strings"
+	"time"
 
 	"github.com/chrishrb/ezr2mqtt/api"
 	"github.com/chrishrb/ezr2mqtt/transport"
 )
 
-func (r *Poller) pollOnce(ctx context.Context) {
-	res, err := r.client.Connect()
-	if err != nil {
-		slog.Error("error sending message to static endpoint", "error", err)
-	}
+func (r *Poller) runDiscovery(ctx context.Context) {
+	for {
+		select {
+		case <-ctx.Done():
+			slog.Info("shutting down home assistant discovery")
+			return
+		case <-time.After(r.discoveryRunEvery):
+			res, err := r.client.Connect()
+			if err != nil {
+				slog.Error("error sending message to static endpoint", "error", err)
+			}
 
-	// Store device ID
-	r.store.SetID(r.name, *res.Device.ID)
+			// Store device ID
+			r.store.SetID(r.name, *res.Device.ID)
 
-	// Build json meta data
-	if res.Device.HeatAreas != nil {
-		for _, h := range *res.Device.HeatAreas {
-			roomName := removeUmlauts(*h.Name)
-			roomNumber := *h.Nr
+			// Build json meta data
+			if res.Device.HeatAreas != nil {
+				for _, h := range *res.Device.HeatAreas {
+					roomName := removeUmlauts(*h.Name)
+					roomNumber := *h.Nr
 
-			r.emitTemperatureTargetDiscovery(ctx, res, roomName, roomNumber, *h.TTargetMin, *h.TTargetMax)
-			r.emitTemperatureActualDiscovery(ctx, res, roomName, roomNumber)
-			r.emitHeatareaModeDiscovery(ctx, res, roomName, roomNumber)
+					r.emitTemperatureTargetDiscovery(ctx, res, roomName, roomNumber, *h.TTargetMin, *h.TTargetMax)
+					r.emitTemperatureActualDiscovery(ctx, res, roomName, roomNumber)
+					r.emitHeatareaModeDiscovery(ctx, res, roomName, roomNumber)
+				}
+			}
 		}
 	}
 }

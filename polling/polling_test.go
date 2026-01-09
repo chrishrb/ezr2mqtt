@@ -56,7 +56,8 @@ func TestPoller_Run_StartsPolling(t *testing.T) {
 
 	emitter := &mockEmitter{}
 
-	poller := NewPoller("device1", client, emitter, 50*time.Millisecond, store)
+	// Use a short discovery interval so it runs during the test
+	poller := NewPoller("device1", client, emitter, 50*time.Millisecond, store, WithDiscoveryInterval(10*time.Millisecond))
 
 	ctx, cancel := context.WithTimeout(context.Background(), 200*time.Millisecond)
 	defer cancel()
@@ -66,8 +67,8 @@ func TestPoller_Run_StartsPolling(t *testing.T) {
 	// Wait for polling to occur
 	time.Sleep(250 * time.Millisecond)
 
-	// Should have emitted HA discovery messages from pollOnce
+	// Should have emitted HA discovery messages from discovery
 	// and some periodic temperature/mode messages
 	assert.Greater(t, len(emitter.emittedMessages), 0, "Should have periodic messages")
-	assert.Greater(t, len(emitter.emittedHADiscoveries), 0, "Should have HA discovery messages from pollOnce")
+	assert.Greater(t, len(emitter.emittedHADiscoveries), 0, "Should have HA discovery messages from discovery")
 }
