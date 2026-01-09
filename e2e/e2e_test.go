@@ -58,13 +58,19 @@ func TestE2E_SetTargetTemperatureOverMQTT(t *testing.T) {
 	// Get initial state to store device ID
 	initialMsg, err := mockClient.Connect()
 	require.NoError(t, err)
-	memStore.SetID(deviceName, initialMsg.Device.ID)
+	memStore.SetID(deviceName, *initialMsg.Device.ID)
+
+	// Create emitter
+	emitter := mqtt.NewEmitter(
+		mqtt.WithMqttBrokerUrl[mqtt.Emitter](brokerURL),
+		mqtt.WithMqttPrefix[mqtt.Emitter](mqttPrefix),
+	)
 
 	// Create handler router
 	clients := map[string]transport.Client{
 		deviceName: mockClient,
 	}
-	handlerRouter := handlers.NewHandlerRouter(clients, memStore)
+	handlerRouter := handlers.NewHandlerRouter(clients, emitter, memStore)
 
 	// Create MQTT listener
 	listener := mqtt.NewListener(
@@ -88,13 +94,32 @@ func TestE2E_SetTargetTemperatureOverMQTT(t *testing.T) {
 	// Give listener time to subscribe
 	time.Sleep(200 * time.Millisecond)
 
-	// Create a test MQTT client to publish temperature change
+	// Create a subscriber to listen for state updates
+	messageChan := make(chan *paho.Publish, 10)
+	router := paho.NewStandardRouter()
+
+	// Subscribe to state topics
+	stateTopic := fmt.Sprintf("%s/%s/+/state/+", mqttPrefix, deviceName)
+	router.RegisterHandler(stateTopic, func(p *paho.Publish) {
+		messageChan <- p
+	})
+
+	// Create a test MQTT client to publish temperature change and subscribe to state
 	testClient, err := autopaho.NewConnection(context.Background(), autopaho.ClientConfig{
 		BrokerUrls:        []*url.URL{brokerURL},
 		KeepAlive:         10,
 		ConnectRetryDelay: 1 * time.Second,
+		OnConnectionUp: func(manager *autopaho.ConnectionManager, connack *paho.Connack) {
+			_, err := manager.Subscribe(context.Background(), &paho.Subscribe{
+				Subscriptions: []paho.SubscribeOptions{{Topic: stateTopic}},
+			})
+			if err != nil {
+				t.Logf("subscription error: %v", err)
+			}
+		},
 		ClientConfig: paho.ClientConfig{
 			ClientID: "test-client",
+			Router:   router,
 		},
 	})
 	require.NoError(t, err)
@@ -123,15 +148,34 @@ func TestE2E_SetTargetTemperatureOverMQTT(t *testing.T) {
 	// Wait for message to be processed
 	time.Sleep(300 * time.Millisecond)
 
+	// Verify the state message was emitted back to MQTT
+	expectedStateTopic := fmt.Sprintf("%s/%s/%d/state/temperature_target", mqttPrefix, deviceName, roomNr)
+	var receivedStateMessage bool
+	timeout := time.After(1 * time.Second)
+
+checkStateMessage:
+	for !receivedStateMessage {
+		select {
+		case msg := <-messageChan:
+			if msg.Topic == expectedStateTopic {
+				assert.Equal(t, api.FormatFloat(newTargetTemp), string(msg.Payload), "State message should contain new target temperature")
+				receivedStateMessage = true
+			}
+		case <-timeout:
+			break checkStateMessage
+		}
+	}
+	assert.True(t, receivedStateMessage, "Should receive state update after setting temperature")
+
 	// Verify the temperature was set in the mock client
 	updatedMsg, err := mockClient.Connect()
 	require.NoError(t, err)
 
 	// Find the heat area and verify temperature
 	var found bool
-	for _, heatArea := range updatedMsg.Device.HeatAreas {
-		if heatArea.Nr == roomNr {
-			assert.Equal(t, newTargetTemp, heatArea.TTarget, "Target temperature should be updated")
+	for _, heatArea := range *updatedMsg.Device.HeatAreas {
+		if *heatArea.Nr == roomNr {
+			assert.Equal(t, newTargetTemp, *heatArea.TTarget, "Target temperature should be updated")
 			found = true
 			break
 		}
@@ -174,7 +218,7 @@ func TestE2E_TemperaturePublishedToMQTT(t *testing.T) {
 	initialMsg, err := mockClient.Connect()
 	require.NoError(t, err)
 	deviceID := initialMsg.Device.ID
-	memStore.SetID(deviceName, deviceID)
+	memStore.SetID(deviceName, *deviceID)
 
 	// Create MQTT emitter
 	emitter := mqtt.NewEmitter(
@@ -239,9 +283,8 @@ func TestE2E_TemperaturePublishedToMQTT(t *testing.T) {
 
 	// Define expected message types per heat area
 	expectedMessageTypes := []string{"temperature_target", "temperature_actual", "heatarea_mode"}
-	numRooms := len(initialMsg.Device.HeatAreas)
-	numMetaMessages := 1
-	expectedMinMessages := numMetaMessages + (numRooms * len(expectedMessageTypes))
+	numRooms := len(*initialMsg.Device.HeatAreas)
+	expectedMinMessages := numRooms * len(expectedMessageTypes)
 
 collecting:
 	for len(receivedMessages) < expectedMinMessages {
@@ -268,46 +311,52 @@ collecting:
 		"Should receive at least %d messages (meta + temperature data)", expectedMinMessages)
 
 	// Verify messages for each room
-	for _, heatArea := range initialMsg.Device.HeatAreas {
+	for _, heatArea := range *initialMsg.Device.HeatAreas {
 		// Verify temperature_target
-		targetTopic := fmt.Sprintf("%s/%s/%d/state/temperature_target", mqttPrefix, deviceName, heatArea.Nr)
+		targetTopic := fmt.Sprintf("%s/%s/%d/state/temperature_target", mqttPrefix, deviceName, *heatArea.Nr)
 		if msg, ok := receivedMessages[targetTopic]; ok {
-			assert.Equal(t, heatArea.Nr, msg.Room, "Room number should match")
+			assert.Equal(t, *heatArea.Nr, msg.Room, "Room number should match")
 			assert.Equal(t, "temperature_target", msg.Type, "Message type should be temperature_target")
-			assert.Equal(t, api.FormatFloat(heatArea.TTarget), msg.Data, "Target temperature should match")
+			assert.Equal(t, api.FormatFloat(*heatArea.TTarget), msg.Data, "Target temperature should match")
 		} else {
-			t.Errorf("Expected to receive temperature_target message for room %d on topic %s", heatArea.Nr, targetTopic)
+			t.Errorf("Expected to receive temperature_target message for room %d on topic %s", *heatArea.Nr, targetTopic)
 		}
 
 		// Verify temperature_actual
-		actualTopic := fmt.Sprintf("%s/%s/%d/state/temperature_actual", mqttPrefix, deviceName, heatArea.Nr)
+		actualTopic := fmt.Sprintf("%s/%s/%d/state/temperature_actual", mqttPrefix, deviceName, *heatArea.Nr)
 		if msg, ok := receivedMessages[actualTopic]; ok {
-			assert.Equal(t, heatArea.Nr, msg.Room, "Room number should match")
+			assert.Equal(t, *heatArea.Nr, msg.Room, "Room number should match")
 			assert.Equal(t, "temperature_actual", msg.Type, "Message type should be temperature_actual")
-			assert.Equal(t, api.FormatFloat(heatArea.TActual), msg.Data, "Actual temperature should match")
+			assert.Equal(t, api.FormatFloat(*heatArea.TActual), msg.Data, "Actual temperature should match")
 		} else {
-			t.Errorf("Expected to receive temperature_actual message for room %d on topic %s", heatArea.Nr, actualTopic)
+			t.Errorf("Expected to receive temperature_actual message for room %d on topic %s", *heatArea.Nr, actualTopic)
 		}
 
 		// Verify heatarea_mode
-		modeTopic := fmt.Sprintf("%s/%s/%d/state/heatarea_mode", mqttPrefix, deviceName, heatArea.Nr)
+		modeTopic := fmt.Sprintf("%s/%s/%d/state/heatarea_mode", mqttPrefix, deviceName, *heatArea.Nr)
 		if msg, ok := receivedMessages[modeTopic]; ok {
-			assert.Equal(t, heatArea.Nr, msg.Room, "Room number should match")
+			assert.Equal(t, *heatArea.Nr, msg.Room, "Room number should match")
 			assert.Equal(t, "heatarea_mode", msg.Type, "Message type should be heatarea_mode")
-			assert.Equal(t, "day", msg.Data, "Heat area mode should match")
+			// Get expected mode from heat area
+			expectedMode, err := getExpectedMode(*heatArea.Mode)
+			require.NoError(t, err)
+			assert.Equal(t, expectedMode, msg.Data, "Heat area mode should match")
 		} else {
-			t.Errorf("Expected to receive heatarea_mode message for room %d on topic %s", heatArea.Nr, modeTopic)
+			t.Errorf("Expected to receive heatarea_mode message for room %d on topic %s", *heatArea.Nr, modeTopic)
 		}
 	}
+}
 
-	// Verify meta message was sent
-	metaTopic := fmt.Sprintf("%s/%s/0/state/meta", mqttPrefix, deviceName)
-	if msg, ok := receivedMessages[metaTopic]; ok {
-		assert.Equal(t, 0, msg.Room, "Meta message should have room 0")
-		assert.Equal(t, "meta", msg.Type, "Message type should be meta")
-		assert.NotNil(t, msg.Data, "Meta data should not be nil")
-	} else {
-		t.Errorf("Expected to receive meta message on topic %s", metaTopic)
+func getExpectedMode(mode int) (string, error) {
+	switch mode {
+	case 0:
+		return "auto", nil
+	case 1:
+		return "day", nil
+	case 2:
+		return "night", nil
+	default:
+		return "", fmt.Errorf("unknown heat area mode: %d", mode)
 	}
 }
 
@@ -345,22 +394,28 @@ func TestE2E_SetModeOverMQTT(t *testing.T) {
 	// Get initial state to store device ID
 	initialMsg, err := mockClient.Connect()
 	require.NoError(t, err)
-	memStore.SetID(deviceName, initialMsg.Device.ID)
+	memStore.SetID(deviceName, *initialMsg.Device.ID)
 
 	// Get initial mode for room 1
 	var initialMode int
-	for _, ha := range initialMsg.Device.HeatAreas {
-		if ha.Nr == roomNr {
-			initialMode = ha.Mode
+	for _, ha := range *initialMsg.Device.HeatAreas {
+		if *ha.Nr == roomNr {
+			initialMode = *ha.Mode
 			break
 		}
 	}
+
+	// Create emitter
+	emitter := mqtt.NewEmitter(
+		mqtt.WithMqttBrokerUrl[mqtt.Emitter](brokerURL),
+		mqtt.WithMqttPrefix[mqtt.Emitter](mqttPrefix),
+	)
 
 	// Create handler router
 	clients := map[string]transport.Client{
 		deviceName: mockClient,
 	}
-	handlerRouter := handlers.NewHandlerRouter(clients, memStore)
+	handlerRouter := handlers.NewHandlerRouter(clients, emitter, memStore)
 
 	// Create MQTT listener
 	listener := mqtt.NewListener(
@@ -384,13 +439,32 @@ func TestE2E_SetModeOverMQTT(t *testing.T) {
 	// Give listener time to subscribe
 	time.Sleep(200 * time.Millisecond)
 
+	// Create a subscriber to listen for state updates
+	messageChan := make(chan *paho.Publish, 10)
+	router := paho.NewStandardRouter()
+
+	// Subscribe to state topics
+	stateTopic := fmt.Sprintf("%s/%s/+/state/+", mqttPrefix, deviceName)
+	router.RegisterHandler(stateTopic, func(p *paho.Publish) {
+		messageChan <- p
+	})
+
 	// Create a test MQTT client to publish mode change
 	testClient, err := autopaho.NewConnection(context.Background(), autopaho.ClientConfig{
 		BrokerUrls:        []*url.URL{brokerURL},
 		KeepAlive:         10,
 		ConnectRetryDelay: 1 * time.Second,
+		OnConnectionUp: func(manager *autopaho.ConnectionManager, connack *paho.Connack) {
+			_, err := manager.Subscribe(context.Background(), &paho.Subscribe{
+				Subscriptions: []paho.SubscribeOptions{{Topic: stateTopic}},
+			})
+			if err != nil {
+				t.Logf("subscription error: %v", err)
+			}
+		},
 		ClientConfig: paho.ClientConfig{
 			ClientID: "test-client",
+			Router:   router,
 		},
 	})
 	require.NoError(t, err)
@@ -428,15 +502,34 @@ func TestE2E_SetModeOverMQTT(t *testing.T) {
 			// Wait for message to be processed
 			time.Sleep(300 * time.Millisecond)
 
+			// Verify the state message was emitted back to MQTT
+			expectedStateTopic := fmt.Sprintf("%s/%s/%d/state/heatarea_mode", mqttPrefix, deviceName, roomNr)
+			var receivedStateMessage bool
+			timeout := time.After(1 * time.Second)
+
+		checkStateMessage:
+			for !receivedStateMessage {
+				select {
+				case msg := <-messageChan:
+					if msg.Topic == expectedStateTopic {
+						assert.Equal(t, tc.mode, string(msg.Payload), "State message should contain new mode")
+						receivedStateMessage = true
+					}
+				case <-timeout:
+					break checkStateMessage
+				}
+			}
+			assert.True(t, receivedStateMessage, "Should receive state update after setting mode to %s", tc.mode)
+
 			// Verify the mode was set in the mock client
 			updatedMsg, err := mockClient.Connect()
 			require.NoError(t, err)
 
 			// Find the heat area and verify mode
 			var found bool
-			for _, heatArea := range updatedMsg.Device.HeatAreas {
-				if heatArea.Nr == roomNr {
-					assert.Equal(t, tc.expectedMode, heatArea.Mode, "Mode should be updated to %s (%d)", tc.mode, tc.expectedMode)
+			for _, heatArea := range *updatedMsg.Device.HeatAreas {
+				if *heatArea.Nr == roomNr {
+					assert.Equal(t, tc.expectedMode, *heatArea.Mode, "Mode should be updated to %s (%d)", tc.mode, tc.expectedMode)
 					found = true
 					break
 				}
@@ -490,13 +583,13 @@ func TestE2E_FullIntegration(t *testing.T) {
 	initialMsg, err := mockClient.Connect()
 	require.NoError(t, err)
 	deviceID := initialMsg.Device.ID
-	memStore.SetID(deviceName, deviceID)
+	memStore.SetID(deviceName, *deviceID)
 
 	// Get initial target temperature for room 1
 	var initialTargetTemp float64
-	for _, ha := range initialMsg.Device.HeatAreas {
-		if ha.Nr == roomNr {
-			initialTargetTemp = ha.TTarget
+	for _, ha := range *initialMsg.Device.HeatAreas {
+		if *ha.Nr == roomNr {
+			initialTargetTemp = *ha.TTarget
 			break
 		}
 	}
@@ -511,7 +604,7 @@ func TestE2E_FullIntegration(t *testing.T) {
 	clients := map[string]transport.Client{
 		deviceName: mockClient,
 	}
-	handlerRouter := handlers.NewHandlerRouter(clients, memStore)
+	handlerRouter := handlers.NewHandlerRouter(clients, emitter, memStore)
 
 	// Create MQTT listener
 	listener := mqtt.NewListener(
@@ -623,9 +716,9 @@ func TestE2E_FullIntegration(t *testing.T) {
 	finalMsg, err := mockClient.Connect()
 	require.NoError(t, err)
 
-	for _, ha := range finalMsg.Device.HeatAreas {
-		if ha.Nr == roomNr {
-			assert.Equal(t, newTargetTemp, ha.TTarget,
+	for _, ha := range *finalMsg.Device.HeatAreas {
+		if *ha.Nr == roomNr {
+			assert.Equal(t, newTargetTemp, *ha.TTarget,
 				"Mock client should have the updated target temperature")
 			break
 		}
