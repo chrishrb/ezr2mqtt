@@ -12,31 +12,39 @@ import (
 )
 
 func (r *Poller) runDiscovery(ctx context.Context) {
+	// Run discovery immediately at startup
+	r.doDiscovery(ctx)
+
 	for {
 		select {
 		case <-ctx.Done():
 			slog.Info("shutting down home assistant discovery")
 			return
 		case <-time.After(r.discoveryRunEvery):
-			res, err := r.client.Connect()
-			if err != nil {
-				slog.Error("error sending message to static endpoint", "error", err)
-			}
+			r.doDiscovery(ctx)
+		}
+	}
+}
 
-			// Store device ID
-			r.store.SetID(r.name, *res.Device.ID)
+func (r *Poller) doDiscovery(ctx context.Context) {
+	res, err := r.client.Connect()
+	if err != nil {
+		slog.Error("error sending message to static endpoint", "error", err)
+		return
+	}
 
-			// Build json meta data
-			if res.Device.HeatAreas != nil {
-				for _, h := range *res.Device.HeatAreas {
-					roomName := removeUmlauts(*h.Name)
-					roomNumber := *h.Nr
+	// Store device ID
+	r.store.SetID(r.name, *res.Device.ID)
 
-					r.emitTemperatureTargetDiscovery(ctx, res, roomName, roomNumber, *h.TTargetMin, *h.TTargetMax)
-					r.emitTemperatureActualDiscovery(ctx, res, roomName, roomNumber)
-					r.emitHeatareaModeDiscovery(ctx, res, roomName, roomNumber)
-				}
-			}
+	// Build json meta data
+	if res.Device.HeatAreas != nil {
+		for _, h := range *res.Device.HeatAreas {
+			roomName := removeUmlauts(*h.Name)
+			roomNumber := *h.Nr
+
+			r.emitTemperatureTargetDiscovery(ctx, res, roomName, roomNumber, *h.TTargetMin, *h.TTargetMax)
+			r.emitTemperatureActualDiscovery(ctx, res, roomName, roomNumber)
+			r.emitHeatareaModeDiscovery(ctx, res, roomName, roomNumber)
 		}
 	}
 }

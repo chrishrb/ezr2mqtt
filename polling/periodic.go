@@ -10,32 +10,39 @@ import (
 )
 
 func (r *Poller) pollPeriodic(ctx context.Context) {
+	// Run poller immediately at startup
+	r.doPeriodic(ctx)
+
 	for {
 		select {
 		case <-ctx.Done():
-			slog.Info("shutting down run periodic")
+			slog.Info("shutting down home assistant poller")
 			return
-		case <-time.After(r.runEvery):
-			res, err := r.client.Connect()
-			if err != nil {
-				slog.Error("error sending periodic message to static endpoint", "error", err)
-				continue
-			}
+		case <-time.After(r.discoveryRunEvery):
+			r.doPeriodic(ctx)
+		}
+	}
+}
 
-			if res.Device.HeatAreas != nil {
-				for _, h := range *res.Device.HeatAreas {
-					roomNumber := *h.Nr
+func (r *Poller) doPeriodic(ctx context.Context) {
+	res, err := r.client.Connect()
+	if err != nil {
+		slog.Error("error sending periodic message to static endpoint", "error", err)
+		return
+	}
 
-					r.sendMsg(ctx, roomNumber, "temperature_target", api.FormatFloat(*h.TTarget))
-					r.sendMsg(ctx, roomNumber, "temperature_actual", api.FormatFloat(*h.TActual))
+	if res.Device.HeatAreas != nil {
+		for _, h := range *res.Device.HeatAreas {
+			roomNumber := *h.Nr
 
-					mode, err := getHeatAreaMode(*h.Mode)
-					if err == nil {
-						r.sendMsg(ctx, roomNumber, "heatarea_mode", mode)
-					} else {
-						slog.Error("error getting heat area mode", "error", err)
-					}
-				}
+			r.sendMsg(ctx, roomNumber, "temperature_target", api.FormatFloat(*h.TTarget))
+			r.sendMsg(ctx, roomNumber, "temperature_actual", api.FormatFloat(*h.TActual))
+
+			mode, err := getHeatAreaMode(*h.Mode)
+			if err == nil {
+				r.sendMsg(ctx, roomNumber, "heatarea_mode", mode)
+			} else {
+				slog.Error("error getting heat area mode", "error", err)
 			}
 		}
 	}
