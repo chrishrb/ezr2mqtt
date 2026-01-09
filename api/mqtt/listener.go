@@ -81,7 +81,7 @@ func (l *Listener) Connect(ctx context.Context, handler api.MessageHandler) (api
 				Subscriptions: []paho.SubscribeOptions{{Topic: topic}},
 			})
 			if err != nil {
-				slog.Error("failed to subscribe to topic", "topic", topic)
+				slog.Error("failed to subscribe to topic", "topic", topic, "error", err)
 				return
 			}
 			mqttRouter.UnregisterHandler(topic)
